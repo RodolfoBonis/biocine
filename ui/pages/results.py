@@ -10,7 +10,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-import os
 import tempfile
 from utils import (
     generate_model_summary,
@@ -24,6 +23,7 @@ def show_results():
     """
     Renderiza a página de resultados
     """
+    global os
     st.markdown("<h2 class='sub-header'>Resultados</h2>", unsafe_allow_html=True)
 
     # Verifica se há dados disponíveis
@@ -472,6 +472,7 @@ def show_results():
                             # Para manter compatibilidade com o relatório HTML,
                             # ainda precisamos de figuras Matplotlib
                             import matplotlib.pyplot as plt
+                            import os
 
                             # Adiciona figuras se necessário
                             if include_cinetic and has_cinetic_models and 'tempo' in data.columns and 'biomassa' in data.columns:
@@ -534,20 +535,54 @@ def show_results():
                                 ml_summary,
                                 data_summary,
                                 figures,
-                                report_path
+                                report_path,
+                                use_relative_paths=True  # Adicione este parâmetro
                             )
 
                             if success:
-                                # Lê o arquivo HTML
+                                # Cria um arquivo ZIP com o HTML e as figuras
+                                import zipfile
+                                import os
+
+                                # Cria um arquivo ZIP temporário
+                                zip_path = os.path.join(temp_dir, "relatorio_biocine.zip")
+
+                                with zipfile.ZipFile(zip_path, 'w') as zipf:
+                                    # Adiciona o arquivo HTML
+                                    zipf.write(report_path, arcname=os.path.basename(report_path))
+
+                                    # Adiciona a pasta de figuras, se existir
+                                    figures_dir = os.path.join(os.path.dirname(report_path), "figures")
+                                    if os.path.exists(figures_dir):
+                                        for root, _, files in os.walk(figures_dir):
+                                            for file in files:
+                                                file_path = os.path.join(root, file)
+                                                # Preserva a estrutura de diretórios relativa
+                                                rel_path = os.path.relpath(file_path, os.path.dirname(report_path))
+                                                zipf.write(file_path, arcname=rel_path)
+
+                                # Lê o arquivo ZIP
+                                with open(zip_path, "rb") as f:
+                                    zip_data = f.read()
+
+                                # Cria botão de download para o ZIP
+                                st.download_button(
+                                    label="Baixar Relatório HTML com Figuras (ZIP)",
+                                    data=zip_data,
+                                    file_name="relatorio_biocine.zip",
+                                    mime="application/zip"
+                                )
+
+                                # Opcionalmente, mantém o download do HTML puro também
                                 with open(report_path, "r", encoding="utf-8") as f:
                                     html_content = f.read()
 
-                                # Cria botão de download
                                 st.download_button(
-                                    label="Baixar Relatório HTML",
+                                    label="Baixar Apenas o HTML (sem figuras)",
                                     data=html_content,
                                     file_name="relatorio_biocine.html",
-                                    mime="text/html"
+                                    mime="text/html",
+                                    key="html_only"
                                 )
                             else:
                                 st.error("Erro ao gerar o relatório HTML.")

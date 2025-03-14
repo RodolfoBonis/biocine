@@ -7,6 +7,8 @@ resultados da modelagem cinética e de machine learning.
 
 import os
 import datetime
+
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from jinja2 import Template
@@ -62,8 +64,10 @@ def generate_ml_summary(ml_model):
     return summary
 
 
+# Alterações na função export_report_to_html do arquivo utils/report_generator.py
+
 def export_report_to_html(models_summary, ml_summary=None, data_summary=None,
-                          figures=None, output_path="report.html"):
+                          figures=None, output_path="report.html", use_relative_paths=True):
     """
     Exporta um relatório em formato HTML
 
@@ -73,11 +77,12 @@ def export_report_to_html(models_summary, ml_summary=None, data_summary=None,
         data_summary: Dictionary com o resumo dos dados (opcional)
         figures: Dictionary com as figuras (opcional)
         output_path: Caminho para o arquivo HTML
+        use_relative_paths: Se True, usa caminhos relativos para as figuras (para funcionar no ZIP)
 
     Returns:
         True se a exportação foi bem-sucedida, False caso contrário
     """
-    # Template HTML
+    # Template HTML (mantém o mesmo)
     html_template = """
     <!DOCTYPE html>
     <html>
@@ -125,6 +130,9 @@ def export_report_to_html(models_summary, ml_summary=None, data_summary=None,
             .figure img {
                 max-width: 100%;
                 height: auto;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 5px;
             }
             .header {
                 display: flex;
@@ -327,13 +335,31 @@ def export_report_to_html(models_summary, ml_summary=None, data_summary=None,
         # Salva as figuras, se disponíveis
         figures_paths = {}
         if figures:
-            figures_dir = os.path.join(os.path.dirname(output_path), "figures")
+            # Cria um diretório para as figuras dentro da mesma pasta do relatório
+            report_dir = os.path.dirname(output_path)
+            figures_dir = os.path.join(report_dir, "figures")
             os.makedirs(figures_dir, exist_ok=True)
 
             for fig_name, fig in figures.items():
-                fig_path = os.path.join(figures_dir, f"{fig_name}.png")
-                fig.savefig(fig_path, bbox_inches='tight')
-                figures_paths[fig_name] = os.path.relpath(fig_path, os.path.dirname(output_path))
+                # Nome de arquivo único para a figura
+                fig_filename = f"{fig_name}.png"
+                fig_path = os.path.join(figures_dir, fig_filename)
+
+                # Salva a figura com qualidade alta
+                fig.savefig(fig_path, bbox_inches='tight', dpi=300)
+
+                # Define o caminho relativo de acordo com o parâmetro
+                if use_relative_paths:
+                    # Caminho relativo para uso dentro de ZIPs (figuras/nome.png)
+                    rel_path = os.path.join("figures", fig_filename)
+                else:
+                    # Caminho absoluto para uso local (caminho completo)
+                    rel_path = fig_path
+
+                figures_paths[fig_name] = rel_path
+
+                print(f"Figura salva em: {fig_path}")
+                print(f"Caminho usado no HTML: {rel_path}")
 
         # Renderiza o template
         template = Template(html_template)
@@ -349,11 +375,13 @@ def export_report_to_html(models_summary, ml_summary=None, data_summary=None,
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
+        print(f"Relatório HTML salvo em: {output_path}")
         return True
     except Exception as e:
         print(f"Erro ao exportar o relatório: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
-
 
 def export_results_to_excel(models_summary, ml_summary=None, data=None,
                             predictions=None, output_path="results.xlsx"):

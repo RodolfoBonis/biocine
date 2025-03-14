@@ -236,8 +236,19 @@ def show_ml():
                     # Faz a previsão
                     prediction = selected_model.predict(input_data)
 
+                    # Trata diferentes formatos de retorno possíveis
+                    if isinstance(prediction, np.ndarray):
+                        if prediction.ndim == 2:
+                            pred_value = prediction[0, 0]
+                        elif prediction.ndim == 1:
+                            pred_value = prediction[0]
+                        else:
+                            pred_value = prediction
+                    else:
+                        pred_value = prediction
+
                     # Exibe o resultado
-                    st.success(f"Previsão: {prediction[0][0]:.4f}")
+                    st.success(f"Previsão: {float(pred_value):.4f}")
 
                     # Cria uma visualização da previsão
                     if 'tempo' in feature_values:
@@ -260,8 +271,20 @@ def show_ml():
                             temp_input = np.array([temp_values[f] for f in selected_model.features]).reshape(1, -1)
                             # Faz a previsão
                             temp_pred = selected_model.predict(temp_input)
+
+                            # Trata diferentes formatos de retorno possíveis
+                            if isinstance(temp_pred, np.ndarray):
+                                if temp_pred.ndim == 2:
+                                    temp_value = temp_pred[0, 0]
+                                elif temp_pred.ndim == 1:
+                                    temp_value = temp_pred[0]
+                                else:
+                                    temp_value = temp_pred
+                            else:
+                                temp_value = temp_pred
+
                             # Armazena a previsão
-                            predictions.append(temp_pred[0][0])
+                            predictions.append(float(temp_value))
 
                         # Cria o gráfico de evolução
                         fig = plot_interactive_growth_curve(

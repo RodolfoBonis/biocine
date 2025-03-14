@@ -139,6 +139,67 @@ def show_modeling():
                 # Salva os modelos na sessão
                 st.session_state.models = models_fitted
 
+                try:
+                    # Dados experimentais
+                    time_data = data['tempo'].values
+
+                    # Cria um DataFrame com tempo e valores experimentais
+                    pred_data = pd.DataFrame()
+                    pred_data['tempo'] = time_data
+
+                    if 'biomassa' in data.columns:
+                        pred_data['biomassa_experimental'] = data['biomassa']
+
+                    if 'substrato' in data.columns:
+                        pred_data['substrato_experimental'] = data['substrato']
+
+                    # Adiciona previsões de cada modelo
+                    for model_name, model_info in models_fitted.items():
+                        predictions = model_info['predictions']
+
+                        if isinstance(predictions, dict):
+                            for var_name, values in predictions.items():
+                                pred_data[f'{model_name}_{var_name}'] = values
+                        else:
+                            pred_data[f'{model_name}_biomassa'] = predictions
+
+                    # Salva os dados em um arquivo
+                    import os
+                    import yaml
+                    import datetime
+
+                    # Carrega configurações
+                    config_path = os.path.join(
+                        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                        "config", "config.yaml")
+
+                    with open(config_path, "r") as f:
+                        config = yaml.safe_load(f)
+
+                    # Define o caminho
+                    processed_dir = os.path.join(
+                        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                        config['paths']['processed_data'])
+
+                    os.makedirs(processed_dir, exist_ok=True)
+
+                    # Cria nome de arquivo
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    models_str = "_".join([m.lower() for m in models_fitted.keys()])
+
+                    filename = f"model_predictions_{models_str}_{timestamp}.csv"
+                    file_path = os.path.join(processed_dir, filename)
+
+                    # Salva os dados
+                    from utils.data_processor import save_processed_data
+                    success = save_processed_data(pred_data, file_path)
+
+                    if success:
+                        st.info(f"Previsões do modelo salvas em: {file_path}")
+
+                except Exception as e:
+                    print(f"Erro ao salvar previsões: {str(e)}")  # Apenas log, não mostra para o usuário
+
                 # Exibe os resultados
                 with results_container:
                     st.subheader("Resultados do Ajuste")

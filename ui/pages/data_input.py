@@ -79,28 +79,68 @@ def show_data_input():
 
                     # Botão para processar os dados
                     if st.button("Processar Dados"):
-                        # Pré-processamento
-                        fill_missing = "Preencher valores ausentes" in preprocessing_options
-                        normalize = "Normalizar dados" in preprocessing_options
+                        try:
+                            # Pré-processamento
+                            fill_missing = "Preencher valores ausentes" in preprocessing_options
+                            normalize = "Normalizar dados" in preprocessing_options
 
-                        processed_data = preprocess_data(data, fill_missing, normalize)
+                            processed_data = preprocess_data(data, fill_missing, normalize)
 
-                        # Renomeia as colunas para padronização
-                        column_mapping = {
-                            time_col: "tempo",
-                            biomass_col: "biomassa"
-                        }
+                            # Renomeia as colunas para padronização
+                            column_mapping = {
+                                time_col: "tempo",
+                                biomass_col: "biomassa"
+                            }
 
-                        if substrate_col != "Nenhuma":
-                            column_mapping[substrate_col] = "substrato"
+                            if substrate_col != "Nenhuma":
+                                column_mapping[substrate_col] = "substrato"
 
-                        processed_data = processed_data.rename(columns=column_mapping)
+                            processed_data = processed_data.rename(columns=column_mapping)
 
-                        # Salva os dados no estado da sessão
-                        st.session_state.data = processed_data
+                            # Salva os dados no estado da sessão
+                            st.session_state.data = processed_data
 
-                        st.success("Dados processados com sucesso!")
-                        st.info("Vá para a guia 'Visualizar Dados' para explorar os dados.")
+                            # Salva os dados em um arquivo na pasta processed
+                            import os
+                            import yaml
+                            import datetime
+
+                            # Carrega configurações para obter o caminho do diretório
+                            config_path = os.path.join(
+                                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                "config", "config.yaml")
+
+                            with open(config_path, "r") as f:
+                                config = yaml.safe_load(f)
+
+                            # Define o caminho do arquivo
+                            processed_dir = os.path.join(
+                                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                config['paths']['processed_data'])
+
+                            os.makedirs(processed_dir, exist_ok=True)
+
+                            # Cria um nome descritivo para o arquivo
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            source_name = os.path.splitext(os.path.basename(uploaded_file.name))[0]
+                            options_suffix = f"_fill{int(fill_missing)}_norm{int(normalize)}"
+
+                            filename = f"{source_name}_processed_{timestamp}{options_suffix}.csv"
+                            file_path = os.path.join(processed_dir, filename)
+
+                            # Salva os dados
+                            from utils.data_processor import save_processed_data
+                            success = save_processed_data(processed_data, file_path)
+
+                            # Mensagens de sucesso
+                            st.success("Dados processados com sucesso!")
+
+                            if success:
+                                st.info(f"Dados processados salvos em: {file_path}")
+
+                            st.info("Vá para a guia 'Visualizar Dados' para explorar os dados.")
+                        except Exception as e:
+                            st.error(f"Erro ao processar os dados: {str(e)}")
                 else:
                     st.warning("Os dados importados não têm o formato adequado para modelagem cinética.")
 
@@ -121,14 +161,47 @@ def show_data_input():
 
         # Botão para gerar dados
         if st.button("Gerar Dados de Exemplo"):
-            # Gera os dados
-            example_data = generate_example_data(n_samples, seed)
+            try:
+                # Gera os dados
+                example_data = generate_example_data(n_samples, seed)
 
-            # Salva os dados no estado da sessão
-            st.session_state.data = example_data
+                # Salva os dados no estado da sessão
+                st.session_state.data = example_data
 
-            st.success("Dados de exemplo gerados com sucesso!")
-            st.info("Vá para a guia 'Visualizar Dados' para explorar os dados.")
+                # Salva os dados em um arquivo
+                import os
+                import yaml
+
+                # Carrega configurações para obter o caminho do diretório
+                config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                           "config", "config.yaml")
+
+                with open(config_path, "r") as f:
+                    config = yaml.safe_load(f)
+
+                # Define o caminho do arquivo
+                example_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                                           config['paths']['example_data'])
+
+                os.makedirs(example_dir, exist_ok=True)
+
+                filename = f"example_data_n{n_samples}_seed{seed}.csv"
+                file_path = os.path.join(example_dir, filename)
+
+                # Salva os dados
+                from utils.data_processor import save_processed_data
+                success = save_processed_data(example_data, file_path)
+
+                # Mensagens de sucesso
+                st.success("Dados de exemplo gerados com sucesso!")
+
+                if success:
+                    st.info(f"Dados salvos em: {file_path}")
+
+                st.info("Vá para a guia 'Visualizar Dados' para explorar os dados.")
+
+            except Exception as e:
+                st.error(f"Erro ao gerar dados de exemplo: {str(e)}")
 
     with tab3:
         st.subheader("Visualizar Dados")
