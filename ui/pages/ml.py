@@ -5,14 +5,13 @@ Esta página permite treinar modelos de machine learning para prever
 parâmetros do processo de tratamento biológico.
 """
 
-import matplotlib.pyplot as plt
+import streamlit as st
 import numpy as np
 import pandas as pd
-import streamlit as st
-
+import plotly.express as px
+import plotly.graph_objects as go
 from models import ModelFactory
-from utils import plot_feature_importance, plot_interactive_growth_curve
-
+from utils import plot_interactive_growth_curve
 
 def show_ml():
     """
@@ -29,9 +28,7 @@ def show_ml():
     data = st.session_state.data
 
     # Interface para machine learning
-    st.markdown(
-        "<div class='info-box'>Utilize algoritmos de machine learning para prever parâmetros do processo de tratamento.</div>",
-        unsafe_allow_html=True)
+    st.markdown("<div class='info-box'>Utilize algoritmos de machine learning para prever parâmetros do processo de tratamento.</div>", unsafe_allow_html=True)
 
     # Tabs para diferentes funcionalidades
     tab1, tab2 = st.tabs(["Previsão de Parâmetros", "Otimização"])
@@ -128,8 +125,23 @@ def show_ml():
 
                     try:
                         importance_df = ml_model.get_feature_importance()
-                        fig = plot_feature_importance(importance_df)
-                        st.pyplot(fig)
+
+                        # Plotly horizontal bar chart para importância de características
+                        fig = px.bar(
+                            importance_df,
+                            x='Importance',
+                            y='Feature',
+                            orientation='h',
+                            title='Importância das Características',
+                            text='Importance',
+                            labels={'Importance': 'Importância', 'Feature': 'Característica'}
+                        )
+
+                        fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
+                        fig.update_layout(xaxis_range=[0, importance_df['Importance'].max() * 1.1])
+
+                        st.plotly_chart(fig, use_container_width=True)
+
                     except Exception as e:
                         st.warning(f"Não foi possível gerar o gráfico de importância: {str(e)}")
 
@@ -139,21 +151,39 @@ def show_ml():
                     # Faz previsões no conjunto de teste
                     y_test_pred = ml_model.predict(ml_model.X_test)
 
-                    # Cria o gráfico
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.scatter(ml_model.y_test, y_test_pred)
+                    # Cria o gráfico de dispersão com Plotly
+                    scatter_data = pd.DataFrame({
+                        'Valores Reais': ml_model.y_test.flatten(),
+                        'Previsões': y_test_pred.flatten()
+                    })
+
+                    fig = px.scatter(
+                        scatter_data,
+                        x='Valores Reais',
+                        y='Previsões',
+                        title='Previsões vs. Valores Reais'
+                    )
 
                     # Adiciona linha de referência (y=x)
-                    min_val = min(ml_model.y_test.min(), y_test_pred.min())
-                    max_val = max(ml_model.y_test.max(), y_test_pred.max())
-                    ax.plot([min_val, max_val], [min_val, max_val], 'r--')
+                    min_val = min(scatter_data['Valores Reais'].min(), scatter_data['Previsões'].min())
+                    max_val = max(scatter_data['Valores Reais'].max(), scatter_data['Previsões'].max())
 
-                    ax.set_xlabel('Valores Reais')
-                    ax.set_ylabel('Previsões')
-                    ax.set_title('Previsões vs. Valores Reais')
-                    ax.grid(True, linestyle='--', alpha=0.7)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[min_val, max_val],
+                            y=[min_val, max_val],
+                            mode='lines',
+                            name='y=x',
+                            line=dict(color='red', dash='dash')
+                        )
+                    )
 
-                    st.pyplot(fig)
+                    fig.update_layout(
+                        xaxis_title='Valores Reais',
+                        yaxis_title='Previsões'
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
 
             except Exception as e:
                 st.error(f"Erro ao treinar o modelo: {str(e)}")
@@ -251,13 +281,10 @@ def show_ml():
 
         # Verifica se há modelos treinados
         if 'ml_models' not in st.session_state or not st.session_state.ml_models:
-            st.warning(
-                "Nenhum modelo de machine learning treinado. Treine modelos na seção 'Previsão de Parâmetros' primeiro.")
+            st.warning("Nenhum modelo de machine learning treinado. Treine modelos na seção 'Previsão de Parâmetros' primeiro.")
             return
 
-        st.markdown(
-            "<div class='info-box'>Otimize os parâmetros do processo para maximizar a eficiência de remoção ou produção de biomassa.</div>",
-            unsafe_allow_html=True)
+        st.markdown("<div class='info-box'>Otimize os parâmetros do processo para maximizar a eficiência de remoção ou produção de biomassa.</div>", unsafe_allow_html=True)
 
         # Seleciona o objetivo
         objective = st.selectbox(
@@ -381,13 +408,10 @@ def show_ml():
         elif objective == "Maximizar remoção de poluentes":
             # Verifica se há modelos para poluentes
             pollutant_models = [k for k in st.session_state.ml_models.keys()
-                                if any(p in k.lower() for p in
-                                       ['nitrogenio', 'fosforo', 'dqo', 'concentracao_n', 'concentracao_p',
-                                        'concentracao_dqo'])]
+                              if any(p in k.lower() for p in ['nitrogenio', 'fosforo', 'dqo', 'concentracao_n', 'concentracao_p', 'concentracao_dqo'])]
 
             if not pollutant_models:
-                st.warning(
-                    "Nenhum modelo para poluentes encontrado. Treine um modelo para concentração de poluentes primeiro.")
+                st.warning("Nenhum modelo para poluentes encontrado. Treine um modelo para concentração de poluentes primeiro.")
                 return
 
             # Seleciona o modelo
@@ -481,27 +505,36 @@ def show_ml():
                 # Exibe os resultados
                 st.subheader("Resultados da Otimização")
 
-                st.success(
-                    f"Tempo ótimo: {best_time:.2f} dias, Concentração: {best_concentration:.4f}, Eficiência: {best_efficiency:.2f}%")
+                st.success(f"Tempo ótimo: {best_time:.2f} dias, Concentração: {best_concentration:.4f}, Eficiência: {best_efficiency:.2f}%")
 
-                # Gráfico da evolução da concentração e eficiência
-                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12), sharex=True)
+                # Criando dataframes para os gráficos
+                df_conc = pd.DataFrame({
+                    'Tempo (dias)': time_points,
+                    'Concentração': predictions
+                })
 
-                # Concentração
-                ax1.plot(time_points, predictions)
-                ax1.set_ylabel('Concentração')
-                ax1.set_title('Evolução da Concentração ao Longo do Tempo')
-                ax1.grid(True, linestyle='--', alpha=0.7)
+                df_eff = pd.DataFrame({
+                    'Tempo (dias)': time_points,
+                    'Eficiência de Remoção (%)': removal_efficiency
+                })
 
-                # Eficiência
-                ax2.plot(time_points, removal_efficiency)
-                ax2.set_xlabel('Tempo (dias)')
-                ax2.set_ylabel('Eficiência de Remoção (%)')
-                ax2.set_title('Eficiência de Remoção ao Longo do Tempo')
-                ax2.grid(True, linestyle='--', alpha=0.7)
+                # Gráficos interativos com Plotly
+                fig_conc = px.line(
+                    df_conc,
+                    x='Tempo (dias)',
+                    y='Concentração',
+                    title='Evolução da Concentração ao Longo do Tempo'
+                )
 
-                plt.tight_layout()
-                st.pyplot(fig)
+                fig_eff = px.line(
+                    df_eff,
+                    x='Tempo (dias)',
+                    y='Eficiência de Remoção (%)',
+                    title='Eficiência de Remoção ao Longo do Tempo'
+                )
+
+                st.plotly_chart(fig_conc, use_container_width=True)
+                st.plotly_chart(fig_eff, use_container_width=True)
 
                 # Parâmetros ótimos
                 st.markdown("#### Parâmetros Ótimos")

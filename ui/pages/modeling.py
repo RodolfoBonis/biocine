@@ -7,16 +7,13 @@ visualizar os resultados do ajuste.
 
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
 from models import ModelFactory
 from utils import (
-    plot_growth_curve,
-    plot_substrate_consumption,
     plot_interactive_growth_curve,
     plot_interactive_combined
 )
-
 
 def show_modeling():
     """
@@ -41,9 +38,7 @@ def show_modeling():
         return
 
     # Interface para modelagem cinética
-    st.markdown(
-        "<div class='info-box'>Ajuste modelos cinéticos aos seus dados experimentais e visualize os resultados.</div>",
-        unsafe_allow_html=True)
+    st.markdown("<div class='info-box'>Ajuste modelos cinéticos aos seus dados experimentais e visualize os resultados.</div>", unsafe_allow_html=True)
 
     # Seleção de modelo
     model_type = st.selectbox(
@@ -235,7 +230,7 @@ def show_modeling():
                             metrics_df = pd.DataFrame(metrics_data)
                             st.dataframe(metrics_df)
 
-                            # Gráfico comparativo de métricas
+                            # Gráfico comparativo de métricas (usando Plotly)
                             if len(models_fitted) > 1:
                                 st.markdown("#### Comparação de Métricas")
 
@@ -248,15 +243,26 @@ def show_modeling():
                                 # Compara R²
                                 r2_values = [metrics.get('r_squared', 0) for metrics in models_metrics.values()]
 
-                                fig, ax = plt.subplots(figsize=(10, 6))
-                                ax.bar(models_metrics.keys(), r2_values)
-                                ax.set_title('Comparação de R²')
-                                ax.set_xlabel('Modelo')
-                                ax.set_ylabel('R²')
-                                ax.set_ylim(0, 1)
-                                ax.grid(True, linestyle='--', alpha=0.7, axis='y')
+                                # Cria um DataFrame para o gráfico de barras
+                                comparison_df = pd.DataFrame({
+                                    'Modelo': list(models_metrics.keys()),
+                                    'R²': r2_values
+                                })
 
-                                st.pyplot(fig)
+                                # Plotly bar chart
+                                fig = px.bar(
+                                    comparison_df,
+                                    x='Modelo',
+                                    y='R²',
+                                    title='Comparação de R²',
+                                    color='Modelo',
+                                    text='R²',
+                                    range_y=[0, 1]
+                                )
+
+                                fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
+
+                                st.plotly_chart(fig, use_container_width=True)
 
         except Exception as e:
             st.error(f"Erro ao ajustar o modelo: {str(e)}")
@@ -265,8 +271,7 @@ def show_modeling():
     if 'models' in st.session_state and st.session_state.models:
         st.subheader("Simulação")
 
-        st.markdown("<div class='info-box'>Simule o comportamento do sistema com diferentes condições iniciais.</div>",
-                    unsafe_allow_html=True)
+        st.markdown("<div class='info-box'>Simule o comportamento do sistema com diferentes condições iniciais.</div>", unsafe_allow_html=True)
 
         # Seleção de modelo
         model_names = list(st.session_state.models.keys())
@@ -289,12 +294,12 @@ def show_modeling():
             # Parâmetros específicos para cada modelo
             if sim_model_name == "Logístico":
                 sim_x0 = st.slider("X0 (Concentração inicial de biomassa)", 0.01, 2.0,
-                                   float(sim_model.parameters['x0']), 0.01, key="sim_x0")
+                                  float(sim_model.parameters['x0']), 0.01, key="sim_x0")
             elif sim_model_name == "Monod":
                 sim_x0 = st.slider("X0 (Concentração inicial de biomassa)", 0.01, 2.0,
-                                   float(sim_model.parameters['x0']), 0.01, key="sim_x0_monod")
+                                  float(sim_model.parameters['x0']), 0.01, key="sim_x0_monod")
                 sim_s0 = st.slider("S0 (Concentração inicial de substrato)", 1.0, 200.0,
-                                   float(sim_model.parameters['s0']), 1.0)
+                                  float(sim_model.parameters['s0']), 1.0)
 
         # Botão para executar simulação
         if st.button("Executar Simulação"):

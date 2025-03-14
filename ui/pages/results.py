@@ -7,7 +7,8 @@ cinética e de machine learning.
 
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 import numpy as np
 import os
 import tempfile
@@ -18,7 +19,6 @@ from utils import (
     export_report_to_html,
     export_results_to_excel
 )
-
 
 def show_results():
     """
@@ -36,14 +36,11 @@ def show_results():
     has_ml_models = 'ml_models' in st.session_state and st.session_state.ml_models
 
     if not has_cinetic_models and not has_ml_models:
-        st.warning(
-            "Nenhum modelo ajustado. Por favor, ajuste modelos nas seções 'Modelagem Cinética' ou 'Machine Learning' primeiro.")
+        st.warning("Nenhum modelo ajustado. Por favor, ajuste modelos nas seções 'Modelagem Cinética' ou 'Machine Learning' primeiro.")
         return
 
     # Interface para visualização e exportação de resultados
-    st.markdown(
-        "<div class='info-box'>Visualize e exporte os resultados da modelagem cinética e de machine learning.</div>",
-        unsafe_allow_html=True)
+    st.markdown("<div class='info-box'>Visualize e exporte os resultados da modelagem cinética e de machine learning.</div>", unsafe_allow_html=True)
 
     # Tabs para diferentes funcionalidades
     tab1, tab2, tab3 = st.tabs(["Resumo dos Resultados", "Visualização Avançada", "Exportação"])
@@ -158,11 +155,19 @@ def show_results():
                 time_data = data['tempo'].values
                 biomass_data = data['biomassa'].values
 
-                # Criar figura
-                fig, ax = plt.subplots(figsize=(10, 6))
+                # Criar figura interativa com plotly
+                fig = go.Figure()
 
                 # Dados experimentais
-                ax.scatter(time_data, biomass_data, color='black', label='Dados Experimentais')
+                fig.add_trace(
+                    go.Scatter(
+                        x=time_data,
+                        y=biomass_data,
+                        mode='markers',
+                        name='Dados Experimentais',
+                        marker=dict(color='black', size=8)
+                    )
+                )
 
                 # Previsões dos modelos
                 for model_name in selected_models:
@@ -173,30 +178,55 @@ def show_results():
 
                         if isinstance(predictions, dict) and 'biomassa' in predictions:
                             # Para modelos com múltiplas saídas (como Monod)
-                            ax.plot(time_data, predictions['biomassa'], label=f'{model_name} (Biomassa)')
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=time_data,
+                                    y=predictions['biomassa'],
+                                    mode='lines',
+                                    name=f'{model_name} (Biomassa)'
+                                )
+                            )
                         else:
                             # Para modelos com uma saída (como Logístico)
-                            ax.plot(time_data, predictions, label=model_name)
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=time_data,
+                                    y=predictions,
+                                    mode='lines',
+                                    name=model_name
+                                )
+                            )
 
-                # Configurações do gráfico
-                ax.set_xlabel('Tempo (dias)')
-                ax.set_ylabel('Biomassa (g/L)')
-                ax.set_title('Comparação de Modelos Cinéticos')
-                ax.legend()
-                ax.grid(True, linestyle='--', alpha=0.7)
+                # Configurações do layout
+                fig.update_layout(
+                    title='Comparação de Modelos Cinéticos',
+                    xaxis_title='Tempo (dias)',
+                    yaxis_title='Biomassa (g/L)',
+                    legend=dict(x=0.01, y=0.99),
+                    hovermode='closest',
+                    template='plotly_white'
+                )
 
-                st.pyplot(fig)
+                st.plotly_chart(fig, use_container_width=True)
 
                 # Gráfico de substratos, se disponíveis
                 if 'substrato' in data.columns:
                     # Dados experimentais
                     substrate_data = data['substrato'].values
 
-                    # Criar figura
-                    fig_substrate, ax_substrate = plt.subplots(figsize=(10, 6))
+                    # Criar figura interativa com plotly
+                    fig_substrate = go.Figure()
 
                     # Dados experimentais
-                    ax_substrate.scatter(time_data, substrate_data, color='black', label='Dados Experimentais')
+                    fig_substrate.add_trace(
+                        go.Scatter(
+                            x=time_data,
+                            y=substrate_data,
+                            mode='markers',
+                            name='Dados Experimentais',
+                            marker=dict(color='black', size=8)
+                        )
+                    )
 
                     # Previsões dos modelos
                     for model_name in selected_models:
@@ -207,20 +237,28 @@ def show_results():
 
                             if isinstance(predictions, dict) and 'substrato' in predictions:
                                 # Para modelos com múltiplas saídas (como Monod)
-                                ax_substrate.plot(time_data, predictions['substrato'],
-                                                  label=f'{model_name} (Substrato)')
+                                fig_substrate.add_trace(
+                                    go.Scatter(
+                                        x=time_data,
+                                        y=predictions['substrato'],
+                                        mode='lines',
+                                        name=f'{model_name} (Substrato)'
+                                    )
+                                )
 
-                    # Configurações do gráfico
-                    ax_substrate.set_xlabel('Tempo (dias)')
-                    ax_substrate.set_ylabel('Substrato (mg/L)')
-                    ax_substrate.set_title('Comparação de Modelos Cinéticos - Substrato')
-                    ax_substrate.legend()
-                    ax_substrate.grid(True, linestyle='--', alpha=0.7)
+                    # Configurações do layout
+                    fig_substrate.update_layout(
+                        title='Comparação de Modelos Cinéticos - Substrato',
+                        xaxis_title='Tempo (dias)',
+                        yaxis_title='Substrato (mg/L)',
+                        legend=dict(x=0.01, y=0.99),
+                        hovermode='closest',
+                        template='plotly_white'
+                    )
 
-                    st.pyplot(fig_substrate)
+                    st.plotly_chart(fig_substrate, use_container_width=True)
             else:
-                st.warning(
-                    "Dados de tempo e biomassa não encontrados. Verifique os nomes das colunas ('tempo' e 'biomassa').")
+                st.warning("Dados de tempo e biomassa não encontrados. Verifique os nomes das colunas ('tempo' e 'biomassa').")
 
         elif viz_type == "Análise de Resíduos" and has_cinetic_models:
             st.markdown("#### Análise de Resíduos")
@@ -252,24 +290,75 @@ def show_results():
                     # Calcula os resíduos
                     residuals = biomass_data - biomass_pred
 
-                    # Cria figuras para análise de resíduos
-                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+                    # Cria dataframe para plotly
+                    df_residuals = pd.DataFrame({
+                        'Valores Preditos': biomass_pred,
+                        'Resíduos': residuals
+                    })
 
-                    # Resíduos vs. valores preditos
-                    ax1.scatter(biomass_pred, residuals)
-                    ax1.axhline(y=0, color='r', linestyle='-')
-                    ax1.set_xlabel('Valores Preditos')
-                    ax1.set_ylabel('Resíduos')
-                    ax1.set_title('Resíduos vs. Valores Preditos')
-                    ax1.grid(True, linestyle='--', alpha=0.7)
+                    # Gráfico de resíduos interativo com plotly
+                    fig = px.scatter(
+                        df_residuals,
+                        x='Valores Preditos',
+                        y='Resíduos',
+                        title='Resíduos vs. Valores Preditos'
+                    )
 
-                    # QQ-plot dos resíduos
+                    # Adiciona linha de referência y=0
+                    fig.add_hline(
+                        y=0,
+                        line_dash="dash",
+                        line_color="red",
+                        annotation_text="Resíduo Zero",
+                        annotation_position="bottom right"
+                    )
+
+                    fig.update_layout(
+                        xaxis_title='Valores Preditos',
+                        yaxis_title='Resíduos'
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # QQ Plot interativo
                     from scipy import stats
-                    stats.probplot(residuals, plot=ax2)
-                    ax2.set_title('Q-Q Plot dos Resíduos')
 
-                    plt.tight_layout()
-                    st.pyplot(fig)
+                    # Cria dados para qq-plot
+                    qq_data = []
+                    (osm, osr), (slope, intercept, r) = stats.probplot(residuals, dist="norm")
+
+                    for i in range(len(osm)):
+                        qq_data.append({
+                            'Quantis Teóricos': osm[i],
+                            'Quantis Ordenados': osr[i]
+                        })
+
+                    qq_df = pd.DataFrame(qq_data)
+
+                    fig_qq = px.scatter(
+                        qq_df,
+                        x='Quantis Teóricos',
+                        y='Quantis Ordenados',
+                        title='Q-Q Plot dos Resíduos'
+                    )
+
+                    # Adiciona linha de ajuste
+                    fig_qq.add_trace(
+                        go.Scatter(
+                            x=osm,
+                            y=slope * osm + intercept,
+                            mode='lines',
+                            name='Linha de Referência',
+                            line=dict(color='red', dash='dash')
+                        )
+                    )
+
+                    fig_qq.update_layout(
+                        xaxis_title='Quantis Teóricos',
+                        yaxis_title='Quantis Ordenados'
+                    )
+
+                    st.plotly_chart(fig_qq, use_container_width=True)
 
                     # Estatísticas dos resíduos
                     st.markdown("#### Estatísticas dos Resíduos")
@@ -298,8 +387,7 @@ def show_results():
                     else:
                         st.success("Os resíduos parecem seguir uma distribuição normal (p >= 0.05).")
             else:
-                st.warning(
-                    "Dados de tempo e biomassa não encontrados. Verifique os nomes das colunas ('tempo' e 'biomassa').")
+                st.warning("Dados de tempo e biomassa não encontrados. Verifique os nomes das colunas ('tempo' e 'biomassa').")
 
         elif viz_type == "Importância de Características" and has_ml_models:
             st.markdown("#### Importância de Características")
@@ -317,24 +405,21 @@ def show_results():
                 # Obtém a importância das características
                 importance_df = ml_model.get_feature_importance()
 
-                # Cria a figura
-                fig, ax = plt.subplots(figsize=(10, 8))
+                # Visualização interativa com plotly
+                fig = px.bar(
+                    importance_df,
+                    x='Importance',
+                    y='Feature',
+                    orientation='h',
+                    title=f'Importância das Características - {model_name}',
+                    text='Importance',
+                    labels={'Importance': 'Importância', 'Feature': 'Característica'}
+                )
 
-                # Plota a importância
-                bars = ax.barh(importance_df['Feature'], importance_df['Importance'])
+                fig.update_traces(texttemplate='%{text:.4f}', textposition='outside')
+                fig.update_layout(xaxis_range=[0, importance_df['Importance'].max() * 1.1])
 
-                # Adiciona valores
-                for bar in bars:
-                    width = bar.get_width()
-                    ax.text(width + 0.01, bar.get_y() + bar.get_height() / 2, f'{width:.4f}',
-                            ha='left', va='center')
-
-                # Configurações do gráfico
-                ax.set_xlabel('Importância')
-                ax.set_title(f'Importância das Características - {model_name}')
-                ax.set_xlim(0, max(importance_df['Importance']) * 1.2)
-
-                st.pyplot(fig)
+                st.plotly_chart(fig, use_container_width=True)
 
                 # Exibe a tabela
                 st.dataframe(importance_df)
@@ -384,6 +469,10 @@ def show_results():
                         # Figuras
                         figures = {}
                         if include_figures:
+                            # Para manter compatibilidade com o relatório HTML,
+                            # ainda precisamos de figuras Matplotlib
+                            import matplotlib.pyplot as plt
+
                             # Adiciona figuras se necessário
                             if include_cinetic and has_cinetic_models and 'tempo' in data.columns and 'biomassa' in data.columns:
                                 # Dados experimentais
@@ -403,8 +492,7 @@ def show_results():
 
                                         if isinstance(predictions, dict) and 'biomassa' in predictions:
                                             # Para modelos com múltiplas saídas (como Monod)
-                                            ax.plot(time_data, predictions['biomassa'],
-                                                    label=f'{model_name} (Biomassa)')
+                                            ax.plot(time_data, predictions['biomassa'], label=f'{model_name} (Biomassa)')
                                         else:
                                             # Para modelos com uma saída (como Logístico)
                                             ax.plot(time_data, predictions, label=model_name)
