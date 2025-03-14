@@ -14,12 +14,22 @@ from utils import (
     plot_interactive_growth_curve,
     plot_interactive_combined
 )
+from ui.pages.help import show_context_help, show_monod_help, show_logistic_help
 
 def show_modeling():
     """
     Renderiza a página de modelagem cinética
     """
     st.markdown("<h2 class='sub-header'>Modelagem Cinética</h2>", unsafe_allow_html=True)
+
+    # Botão de ajuda geral
+    col1, col2 = st.columns([10, 1])
+    with col2:
+        help_button = st.button("ⓘ", help="Mostrar ajuda sobre modelagem cinética")
+        if help_button:
+            st.session_state.show_help = True
+            st.session_state.help_context = "modeling"
+            return st.rerun()
 
     # Verifica se há dados disponíveis
     if 'data' not in st.session_state or st.session_state.data is None:
@@ -40,7 +50,6 @@ def show_modeling():
     # Interface para modelagem cinética
     st.markdown("<div class='info-box'>Ajuste modelos cinéticos aos seus dados experimentais e visualize os resultados.</div>", unsafe_allow_html=True)
 
-    # Seleção de modelo
     model_type = st.selectbox(
         "Selecione o modelo cinético",
         ["Logístico", "Monod", "Comparar ambos"],
@@ -54,14 +63,28 @@ def show_modeling():
 
     with col1:
         if model_type in ["Logístico", "Comparar ambos"]:
-            st.markdown("#### Modelo Logístico")
+            model_col1, model_col2 = st.columns([10, 1], gap="small")
+            with model_col1:
+                st.markdown("#### Modelo Logístico")
+            with model_col2:
+                if st.button("ⓘ", help="Ajuda sobre o modelo Logístico") :
+                    st.session_state.show_help = True
+                    st.session_state.help_context = "logistic"
+                    return st.rerun()
             umax_logistic = st.slider("μmax (Taxa máxima de crescimento)", 0.01, 2.0, 0.5, 0.01)
             x0_logistic = st.slider("X0 (Concentração inicial de biomassa)", 0.01, 2.0, 0.1, 0.01)
             xmax_logistic = st.slider("Xmax (Concentração máxima de biomassa)", 1.0, 10.0, 5.0, 0.1)
 
     with col2:
         if model_type in ["Monod", "Comparar ambos"]:
-            st.markdown("#### Modelo de Monod")
+            model_col1, model_col2 = st.columns([10, 1], gap="small")
+            with model_col1:
+                st.markdown("#### Modelo de Monod")
+            with model_col2:
+                if st.button("ⓘ", help="Ajuda sobre o modelo de Monod"):
+                    st.session_state.show_help = True
+                    st.session_state.help_context = "monod"
+                    return st.rerun()
             umax_monod = st.slider("μmax (Taxa máxima de crescimento)", 0.01, 2.0, 0.5, 0.01, key="monod_umax")
             ks = st.slider("Ks (Constante de meia saturação)", 1.0, 200.0, 10.0, 1.0)
             y = st.slider("Y (Coeficiente de rendimento)", 0.01, 1.0, 0.5, 0.01)

@@ -6,6 +6,7 @@ teórica e referências bibliográficas.
 """
 
 import streamlit as st
+from ui.pages.help import show_context_help
 
 
 def show_about():
@@ -13,6 +14,16 @@ def show_about():
     Renderiza a página Sobre
     """
     st.markdown("<h2 class='sub-header'>Sobre o BioCine</h2>", unsafe_allow_html=True)
+
+    # Botão de ajuda
+    col1, col2 = st.columns([10, 1])
+    with col2:
+        help_button = st.button("ⓘ", help="Mostrar ajuda sobre o BioCine")
+        if help_button:
+            st.session_state.show_help = True
+            st.session_state.help_context = "about"
+            return st.rerun()
+
 
     # Introdução
     st.markdown("""

@@ -18,6 +18,7 @@ from utils import (
     export_report_to_html,
     export_results_to_excel
 )
+from ui.pages.help import show_context_help, show_export_help
 
 def show_results():
     """
@@ -25,6 +26,15 @@ def show_results():
     """
     global os
     st.markdown("<h2 class='sub-header'>Resultados</h2>", unsafe_allow_html=True)
+
+    # Botão de ajuda
+    col1, col2 = st.columns([10, 1])
+    with col2:
+        help_button = st.button("ⓘ", help="Mostrar ajuda sobre resultados")
+        if help_button:
+            st.session_state.show_help = True
+            st.session_state.help_context = "results"
+            return st.rerun()
 
     # Verifica se há dados disponíveis
     if 'data' not in st.session_state or st.session_state.data is None:
@@ -429,6 +439,16 @@ def show_results():
 
     with tab3:
         st.markdown("### Exportação de Resultados")
+
+        # Botão de ajuda específico para exportação
+        col1, col2 = st.columns([10, 1])
+        with col2:
+            export_help_button = st.button("ⓘ", help="Ajuda sobre exportação", key="export_help")
+            if export_help_button:
+                st.session_state.show_help = True
+                st.session_state.help_context = "export"
+                return st.rerun()
+
 
         # Seleciona o formato de exportação
         export_format = st.selectbox(

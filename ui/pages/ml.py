@@ -12,12 +12,22 @@ import plotly.express as px
 import plotly.graph_objects as go
 from models import ModelFactory
 from utils import plot_interactive_growth_curve
+from ui.pages.help import show_context_help, show_ml_help
 
 def show_ml():
     """
     Renderiza a página de machine learning
     """
     st.markdown("<h2 class='sub-header'>Machine Learning</h2>", unsafe_allow_html=True)
+
+    # Botão de ajuda
+    col1, col2 = st.columns([10, 1])
+    with col2:
+        help_button = st.button("ⓘ", help="Mostrar ajuda sobre Machine Learning")
+        if help_button:
+            st.session_state.show_help = True
+            st.session_state.help_context = "ml"
+            return st.rerun()
 
     # Verifica se há dados disponíveis
     if 'data' not in st.session_state or st.session_state.data is None:
