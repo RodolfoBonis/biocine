@@ -12,7 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from models import ModelFactory
 from utils import plot_interactive_growth_curve
-from ui.pages.help import show_context_help, show_ml_help
+
 
 def show_ml():
     """
@@ -309,6 +309,8 @@ def show_ml():
                 except Exception as e:
                     st.error(f"Erro ao fazer previsão: {str(e)}")
 
+            render_model_save_section(selected_model, target_column, selected_features)
+
     with tab2:
         st.markdown("### Otimização de Processo")
 
@@ -587,3 +589,67 @@ def show_ml():
 
                 param_df = pd.DataFrame(param_data)
                 st.dataframe(param_df)
+
+
+"""
+Versão corrigida da função render_model_save_section para
+compatibilidade com a nova estrutura de pastas
+"""
+
+
+def render_model_save_section(model, target_col, selected_features):
+    """
+    Renderiza a seção para salvar um modelo treinado
+
+    Args:
+        model: Modelo treinado
+        target_col: Nome da coluna alvo
+        selected_features: Lista de características usadas no modelo
+    """
+    from utils.model_utils import save_model
+
+    st.markdown("### Salvar Modelo")
+
+    # Nome para o modelo
+    model_name = st.text_input(
+        "Nome do Modelo",
+        value=f"Modelo para {target_col}",
+        help="Um nome descritivo para identificar o modelo"
+    )
+
+    # Descrição opcional
+    model_description = st.text_area(
+        "Descrição (opcional)",
+        value=f"Modelo treinado para prever {target_col} usando {len(selected_features)} características",
+        help="Informações adicionais sobre o modelo, parâmetros, etc."
+    )
+
+    # Botão para salvar
+    if st.button("Salvar Modelo", key="save_model_btn"):
+        with st.spinner("Salvando modelo..."):
+            try:
+                # Salva o modelo
+                model_info = save_model(
+                    model,
+                    model_name,
+                    feature_names=selected_features,
+                    target_name=target_col,
+                    description=model_description
+                )
+
+                st.success(f"Modelo '{model_name}' salvo com sucesso!")
+
+                # Exibe informações atualizadas - versão pasta
+                if 'model_dir' in model_info:
+                    st.info(f"Pasta do modelo: {model_info['model_dir']}")
+                elif 'model_file' in model_info:
+                    st.info(f"Arquivo: {model_info['model_file']}")
+
+                # Também mostra o método de serialização usado
+                if 'serialization' in model_info:
+                    st.info(f"Método de serialização: {model_info['serialization']}")
+
+            except Exception as e:
+                st.error(f"Erro ao salvar modelo: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())

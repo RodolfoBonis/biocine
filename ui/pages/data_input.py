@@ -29,7 +29,7 @@ def show_data_input():
 
 
     # Tabs para diferentes formas de entrada de dados
-    tab1, tab2, tab3 = st.tabs(["Importar CSV", "Gerar Dados de Exemplo", "Visualizar Dados"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Importar CSV", "Gerar Dados de Exemplo", "Visualizar Dados", "Carregar Modelos"])
 
     with tab1:
         st.subheader("Importar Dados de Arquivo CSV")
@@ -382,3 +382,89 @@ def show_data_input():
                         st.error(f"Erro ao salvar como Excel: {str(e)}")
         else:
             st.info("Nenhum dado disponível. Importe um arquivo CSV ou gere dados de exemplo.")
+
+    with tab4:
+        render_model_load_section()
+
+def render_model_load_section():
+    """
+    Renderiza a seção para carregar modelos salvos
+    """
+    from utils.model_utils import list_saved_models, load_model
+
+    st.markdown("### Carregar Modelos Salvos")
+
+    # Lista modelos disponíveis
+    models_df = list_saved_models()
+
+    if models_df.empty:
+        st.info("Nenhum modelo salvo encontrado. Treine e salve modelos na seção de Machine Learning.")
+        return
+
+    # Exibe tabela com modelos disponíveis
+    display_cols = ['name', 'target', 'model_type', 'datetime', 'description']
+    display_cols = [col for col in display_cols if col in models_df.columns]
+
+    st.dataframe(
+        models_df[display_cols],
+        column_config={
+            "name": "Nome do Modelo",
+            "target": "Variável Alvo",
+            "model_type": "Tipo de Modelo",
+            "datetime": "Data de Criação",
+            "description": "Descrição"
+        }
+    )
+
+    # Seleção de modelo para carregar
+    model_names = models_df['name'].tolist()
+    selected_model_name = st.selectbox(
+        "Selecione um modelo para carregar",
+        model_names,
+        index=0
+    )
+
+    # Obtém informações do modelo selecionado
+    selected_model_info = models_df[models_df['name'] == selected_model_name].iloc[0]
+    model_path = selected_model_info['full_path']
+
+    # Exibe informações do modelo selecionado
+    st.markdown("**Informações do Modelo Selecionado:**")
+
+    if 'target' in selected_model_info and selected_model_info['target']:
+        st.markdown(f"- **Alvo:** {selected_model_info['target']}")
+
+    if 'model_type' in selected_model_info:
+        st.markdown(f"- **Tipo:** {selected_model_info['model_type']}")
+
+    if 'features' in selected_model_info and selected_model_info['features']:
+        if isinstance(selected_model_info['features'], list):
+            st.markdown(f"- **Características:** {', '.join(selected_model_info['features'])}")
+
+    # Botão para carregar o modelo
+    if st.button("Carregar Modelo", key="load_model_btn"):
+        with st.spinner("Carregando modelo..."):
+            try:
+                # Carrega o modelo
+                model, model_info = load_model(model_path)
+
+                # Armazena o modelo na sessão
+                if 'ml_models' not in st.session_state:
+                    st.session_state.ml_models = {}
+
+                target_name = model_info['target']
+                st.session_state.ml_models[target_name] = model
+
+                # Registra as características do modelo
+                if 'model_features' not in st.session_state:
+                    st.session_state.model_features = {}
+
+                st.session_state.model_features[target_name] = model_info.get('features', [])
+
+                st.success(f"Modelo '{selected_model_name}' carregado com sucesso!")
+                st.info(f"O modelo para prever '{target_name}' está disponível para uso nas outras seções.")
+
+            except Exception as e:
+                st.error(f"Erro ao carregar modelo: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())

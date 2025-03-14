@@ -1,0 +1,11 @@
+{
+    "models": [
+        {
+            "name": "Modelo para eficiencia_remocao_n",
+            "directory": "modelo_para_eficiencia_remocao_n_20250314_153424",
+            "timestamp": "20250314_153424",
+            "target": "eficiencia_remocao_n",
+            "model_type": "RandomForestModel"
+        }
+    ]
+}

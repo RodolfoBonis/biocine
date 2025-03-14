@@ -864,78 +864,94 @@ class ProcessOptimizer:
 
         return fig
 
-    def design_of_experiments(self, design_type='central_composite', center_points=1):
+    def design_of_experiments(self, design_type='latin_hypercube', center_points=1, **kwargs):
         """
-        Gera um plano experimental para exploração sistemática do espaço de parâmetros
+        Generate design of experiments based on parameter bounds.
 
         Args:
-            design_type: Tipo de planejamento ('full_factorial', 'fractional_factorial',
-                         'central_composite', 'box_behnken', 'latin_hypercube')
-            center_points: Número de pontos centrais
+            design_type (str): Type of experimental design
+            center_points (int): Number of center points
+            **kwargs: Additional parameters for specific designs
 
         Returns:
-            DataFrame com pontos experimentais
+            pd.DataFrame: DataFrame containing the experimental design points
         """
-        try:
-            import pyDOE2 as pyDOE
-        except ImportError:
-            import pyDOE
+        import numpy as np
+        import pandas as pd
+        from pyDOE import lhs, bbdesign, ccdesign
 
-        # Número de fatores (parâmetros)
-        n_factors = len(self.parameter_bounds)
+        # Ensure we have parameter bounds defined
+        if not self.parameter_bounds:
+            raise ValueError("Parameter bounds must be defined before creating experimental design")
 
-        if n_factors == 0:
-            raise ValueError("Defina os limites dos parâmetros antes de gerar o planejamento")
+        n_params = len(self.parameter_bounds)
+        param_names = list(self.parameter_bounds.keys())
 
-        # Gera o planejamento experimental no espaço normalizado [-1, 1]
-        if design_type == 'full_factorial':
-            # Planejamento fatorial completo (2^n)
-            doe_matrix = pyDOE.ff2n(n_factors)
-        elif design_type == 'fractional_factorial':
-            # Planejamento fatorial fracionado (escolhe automaticamente resolução máxima)
-            if n_factors <= 4:
-                resolution = 'full'
-            else:
-                resolution = 'max'
-            doe_matrix = pyDOE.fracfact(pyDOE.fracfact_by_res(n_factors, resolution))
+        # For each design type, create appropriate design matrix
+        if design_type == 'latin_hypercube':
+            # Latin Hypercube Sampling
+            samples = lhs(n_params, samples=kwargs.get('samples', 10))
+
         elif design_type == 'central_composite':
-            # Planejamento composto central
-            doe_matrix = pyDOE.ccdesign(n_factors, center=center_points)
+            # Central Composite Design
+            samples = ccdesign(n_params, face='inscribed', alpha='orthogonal', center=center_points)
+            # Rescale from [-1, 1] to [0, 1]
+            samples = (samples + 1) / 2
+
+        elif design_type == 'full_factorial':
+            # Full Factorial Design - using 2-level factorial
+            from pyDOE import fullfact
+            levels = kwargs.get('levels', 2)
+            # Ensure levels is an integer
+            if not isinstance(levels, int):
+                levels = int(levels)
+            # Create design with specified number of levels for each factor
+            samples = fullfact([levels] * n_params)
+            # Normalize to [0, 1]
+            if levels > 1:
+                samples = samples / (levels - 1)
+
+        elif design_type == 'fractional_factorial':
+            # Fractional Factorial Design
+            from pyDOE import fracfact
+            # Default to resolution III design if not specified
+            gen = kwargs.get('generators', None)
+
+            # For 2-level fractional factorial
+            if gen is None:
+                # Create a basic design string based on number of parameters
+                # This is a simplified approach - more sophisticated generator selection would be better
+                design_str = ''.join([chr(65 + i) for i in range(min(n_params, 7))])
+                if n_params > 7:
+                    # Add interactions as generators for higher dimensions
+                    for i in range(7, n_params):
+                        design_str += f" {chr(65 + (i % 7))}:{chr(65 + ((i + 1) % 7))}"
+            else:
+                design_str = gen
+
+            samples = fracfact(design_str)
+            # Convert from [-1, 1] to [0, 1]
+            samples = (samples + 1) / 2
+
         elif design_type == 'box_behnken':
-            # Planejamento Box-Behnken
-            if n_factors < 3:
-                raise ValueError("Planejamento Box-Behnken requer pelo menos 3 fatores")
-            doe_matrix = pyDOE.bbdesign(n_factors, center=center_points)
-        elif design_type == 'latin_hypercube':
-            # Amostragem por hipercubo latino
-            samples = max(10, 2 ** n_factors)
-            doe_matrix = pyDOE.lhs(n_factors, samples=samples)
-            # Converte para [-1, 1]
-            doe_matrix = doe_matrix * 2 - 1
+            # Box-Behnken Design
+            if n_params < 3:
+                raise ValueError("Box-Behnken design requires at least 3 parameters")
+            samples = bbdesign(n_params, center=center_points)
+            # Convert from [-1, 1] to [0, 1]
+            samples = (samples + 1) / 2
+
         else:
-            raise ValueError(f"Tipo de planejamento desconhecido: {design_type}")
+            raise ValueError(f"Unknown design type: {design_type}")
 
-        # Converte de [-1, 1] para os limites reais
-        real_matrix = np.zeros_like(doe_matrix)
+        # Scale samples from [0,1] to actual parameter bounds
+        design_points = {}
+        for i, param in enumerate(param_names):
+            low, high = self.parameter_bounds[param]
+            design_points[param] = low + samples[:, i] * (high - low)
 
-        for i, param in enumerate(self.parameter_names):
-            lower, upper = self.parameter_bounds[param]
-            # Mapeia de [-1, 1] para [lower, upper]
-            real_matrix[:, i] = lower + (doe_matrix[:, i] + 1) * (upper - lower) / 2
-
-        # Cria DataFrame com o planejamento
-        doe_df = pd.DataFrame(real_matrix, columns=self.parameter_names)
-
-        # Adiciona informações sobre o planejamento
-        doe_df['design_type'] = design_type
-
-        # Armazena o planejamento
-        self.experimental_design = {
-            'design_type': design_type,
-            'dataframe': doe_df,
-            'normalized_matrix': doe_matrix
-        }
-
+        # Create DataFrame with design
+        doe_df = pd.DataFrame(design_points)
         return doe_df
 
     def evaluate_doe_predictions(self, target):
@@ -957,17 +973,62 @@ class ProcessOptimizer:
         # Obtém o planejamento
         doe_df = self.experimental_design['dataframe']
 
-        # Faz previsões com o modelo
-        predictions = self.models[target].predict(doe_df)
+        # Verifica se o modelo tem informações sobre as características que espera
+        if hasattr(self, 'model_features') and target in self.model_features:
+            expected_features = self.model_features[target]
+            # Filtra apenas as características que o modelo espera
+            prediction_data = doe_df[expected_features].copy()
+        else:
+            # Se não sabemos as características esperadas, usa todas as numéricas
+            prediction_data = doe_df.select_dtypes(include=['float64', 'int64']).copy()
 
-        # Adiciona as previsões ao DataFrame
-        result_df = doe_df.copy()
-        result_df[target] = predictions
+        # Garantir que estamos usando apenas as características numéricas para predição
+        try:
+            # Faz previsões com o modelo
+            predictions = self.models[target].predict(prediction_data)
 
-        # Ordena por valor de resposta
-        result_df = result_df.sort_values(by=target, ascending=False)
+            # Adiciona as previsões ao DataFrame
+            result_df = doe_df.copy()
+            result_df[target] = predictions
 
-        return result_df
+            # Ordena por valor de resposta
+            result_df = result_df.sort_values(by=target, ascending=False)
+
+            # Atualiza o estado do experimento na sessão
+            self.experimental_design['evaluated'] = True
+            self.experimental_design['target'] = target
+            self.experimental_design['results'] = result_df
+
+            return result_df
+        except Exception as e:
+            import traceback
+            print(f"Erro detalhado na predição: {str(e)}")
+            print(traceback.format_exc())
+
+            # Tenta um método ainda mais robusto se o anterior falhar
+            try:
+                # Cria um DataFrame com apenas um subconjunto de colunas
+                # que provavelmente são aceitas pelo modelo
+                minimal_df = doe_df[self.parameter_names].copy()
+
+                # Faz previsões com o modelo
+                predictions = self.models[target].predict(minimal_df)
+
+                # Adiciona as previsões ao DataFrame
+                result_df = doe_df.copy()
+                result_df[target] = predictions
+
+                # Ordena por valor de resposta
+                result_df = result_df.sort_values(by=target, ascending=False)
+
+                # Atualiza o estado do experimento na sessão
+                self.experimental_design['evaluated'] = True
+                self.experimental_design['target'] = target
+                self.experimental_design['results'] = result_df
+
+                return result_df
+            except Exception as e2:
+                raise ValueError(f"Falha na predição: {str(e2)}")
 
     def plot_doe_results(self, target_results, main_effects=True, interaction_effects=True):
         """

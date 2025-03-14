@@ -496,82 +496,152 @@ def show_advanced_optimization():
                 st.info("Tente treinar o modelo novamente ou selecione outro modelo.")
 
     with tab4:
-        st.subheader("Planejamento Experimental")
+        show_planejamento_tab(optimizer)
 
-        # Tipo de planejamento
-        design_type = st.selectbox(
-            "Tipo de Planejamento",
-            [
-                "central_composite",
-                "full_factorial",
-                "fractional_factorial",
-                "box_behnken",
-                "latin_hypercube"
-            ],
-            index=0,
-            help="Tipo de planejamento experimental"
-        )
 
-        # Pontos centrais
-        center_points = st.slider(
-            "Pontos Centrais",
-            1, 5, 1,
-            help="Número de replicações no ponto central"
-        )
+def show_planejamento_tab(optimizer):
+    st.subheader("Planejamento Experimental")
 
-        # Botão para gerar planejamento
-        if st.button("Gerar Planejamento", key="gen_doe"):
-            with st.spinner("Gerando planejamento experimental..."):
-                try:
-                    # Gera o planejamento
-                    doe_df = optimizer.design_of_experiments(
-                        design_type=design_type,
-                        center_points=center_points
-                    )
+    # Tipo de planejamento com informações de ajuda para cada opção
+    design_type = st.selectbox(
+        "Tipo de Planejamento",
+        [
+            "latin_hypercube",
+            "central_composite",
+            "full_factorial",
+            "fractional_factorial",
+            "box_behnken"
+        ],
+        index=0,
+        help="""
+        - latin_hypercube: Amostragem eficiente para exploração de espaços complexos
+        - central_composite: Planejamento para superfícies de resposta com pontos centrais
+        - full_factorial: Testa todas as combinações de níveis (cresce exponencialmente)
+        - fractional_factorial: Versão reduzida do fatorial completo
+        - box_behnken: Alternativa ao central_composite sem pontos extremos
+        """
+    )
 
-                    # Exibe o planejamento
-                    st.subheader("Pontos Experimentais")
-                    st.dataframe(doe_df[optimizer.parameter_names])
+    # Pontos centrais
+    center_points = st.slider(
+        "Pontos Centrais",
+        1, 5, 1,
+        help="Número de replicações no ponto central"
+    )
 
-                    # Seleção de alvo para avaliar - CORRIGIDO para mostrar todos os modelos
-                    all_targets = list(optimizer.models.keys())
-                    if all_targets:
-                        target = st.selectbox(
-                            "Selecione um alvo para avaliar o planejamento",
-                            all_targets,
-                            key="doe_eval_target"
-                        )
+    # Botão para gerar planejamento
+    if st.button("Gerar Planejamento", key="gen_doe"):
+        with st.spinner("Gerando planejamento experimental..."):
+            try:
+                # Gera o planejamento
+                doe_df = optimizer.design_of_experiments(
+                    design_type=design_type,
+                    center_points=center_points
+                )
 
-                        # Botão para avaliar
-                        if st.button("Avaliar Planejamento", key="eval_doe"):
-                            with st.spinner("Avaliando planejamento..."):
-                                # Avalia com o modelo selecionado
-                                results_df = optimizer.evaluate_doe_predictions(target)
+                # Armazena na sessão para exibição posterior
+                st.session_state['doe_data'] = doe_df
+                st.session_state['doe_design_type'] = design_type
 
-                                # Exibe resultados
-                                st.subheader("Resultados Previstos")
-                                st.dataframe(results_df[[*optimizer.parameter_names, target]])
+                st.success(f"Planejamento {design_type} gerado com sucesso!")
 
-                                # Plota análise do planejamento
-                                fig_dict = optimizer.plot_doe_results(results_df)
+                # Exibe o planejamento
+                st.subheader("Pontos Experimentais")
+                st.dataframe(doe_df)
 
-                                # Exibe gráficos
-                                if isinstance(fig_dict, dict):
-                                    if 'main_effects' in fig_dict:
-                                        st.subheader("Efeitos Principais")
-                                        st.plotly_chart(fig_dict['main_effects'], use_container_width=True)
+                # Prepara para avaliação
+                st.session_state['doe_generated'] = True
 
-                                    if 'interaction_effects' in fig_dict:
-                                        st.subheader("Interações")
-                                        st.plotly_chart(fig_dict['interaction_effects'], use_container_width=True)
+                # Limpa resultados anteriores
+                if 'doe_results' in st.session_state:
+                    del st.session_state['doe_results']
+                if 'doe_evaluated' in st.session_state:
+                    st.session_state['doe_evaluated'] = False
 
-                                    if 'pareto' in fig_dict:
-                                        st.subheader("Pareto de Efeitos")
-                                        st.plotly_chart(fig_dict['pareto'], use_container_width=True)
-                                else:
-                                    st.plotly_chart(fig_dict, use_container_width=True)
+            except Exception as e:
+                st.error(f"Erro ao gerar planejamento: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
+                st.session_state['doe_generated'] = False
 
-                except Exception as e:
-                    st.error(f"Erro ao gerar planejamento: {str(e)}")
-                    import traceback
-                    st.error(traceback.format_exc())
+    # Se temos um planejamento gerado, mostra a seção de avaliação
+    if 'doe_generated' in st.session_state and st.session_state['doe_generated']:
+        # Informações sobre o planejamento atual
+        if 'doe_design_type' in st.session_state:
+            st.info(f"Planejamento atual: {st.session_state['doe_design_type']}")
+
+        # Seleção de alvo para avaliar
+        all_targets = list(optimizer.models.keys())
+        if all_targets:
+            target = st.selectbox(
+                "Selecione um alvo para avaliar o planejamento",
+                all_targets,
+                key="doe_eval_target"
+            )
+
+            # Botão para avaliar
+            if st.button("Avaliar Planejamento", key="eval_doe"):
+                with st.spinner("Avaliando planejamento..."):
+                    try:
+                        # Avalia com o modelo selecionado
+                        results_df = optimizer.evaluate_doe_predictions(target)
+
+                        # Armazena resultados
+                        st.session_state['doe_results'] = results_df
+                        st.session_state['doe_target'] = target
+                        st.session_state['doe_evaluated'] = True
+
+                        st.success(f"Avaliação concluída para o alvo: {target}")
+
+                    except Exception as e:
+                        st.error(f"Erro ao avaliar planejamento: {str(e)}")
+                        import traceback
+                        st.error(traceback.format_exc())
+                        st.session_state['doe_evaluated'] = False
+        else:
+            st.warning("Nenhum modelo disponível. Treine modelos primeiro na seção 'Machine Learning'.")
+
+    # Se temos resultados de avaliação, mostra-os
+    if 'doe_evaluated' in st.session_state and st.session_state[
+        'doe_evaluated'] and 'doe_results' in st.session_state:
+        # Exibe resultados
+        st.subheader("Resultados da Avaliação")
+
+        target = st.session_state['doe_target']
+        results_df = st.session_state['doe_results']
+
+        # Exibe apenas colunas relevantes
+        display_cols = optimizer.parameter_names.copy()
+        if target in results_df.columns:
+            display_cols.append(target)
+
+        st.dataframe(results_df[display_cols])
+
+        # Análise dos resultados
+        st.subheader("Análise dos Resultados")
+
+        try:
+            # Tenta fazer a análise visual
+            fig_dict = optimizer.plot_doe_results(results_df)
+
+            # Exibe gráficos
+            if isinstance(fig_dict, dict):
+                if 'main_effects' in fig_dict:
+                    st.subheader("Efeitos Principais")
+                    st.plotly_chart(fig_dict['main_effects'], use_container_width=True)
+
+                if 'interaction_effects' in fig_dict:
+                    st.subheader("Interações")
+                    st.plotly_chart(fig_dict['interaction_effects'], use_container_width=True)
+
+                if 'pareto' in fig_dict:
+                    st.subheader("Pareto de Efeitos")
+                    st.plotly_chart(fig_dict['pareto'], use_container_width=True)
+            else:
+                st.plotly_chart(fig_dict, use_container_width=True)
+
+        except Exception as e:
+            st.warning(f"Não foi possível gerar visualizações: {str(e)}")
+            st.info("Você ainda pode analisar os resultados numéricos na tabela acima.")
+            import traceback
+            st.info(f"Detalhes técnicos: {traceback.format_exc()}")

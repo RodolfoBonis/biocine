@@ -31,6 +31,34 @@ class MLModel:
             "test_mse": None
         }
 
+    def __getstate__(self):
+        """
+        Método especial para serialização do objeto
+
+        Returns:
+            dict: Estado do objeto para serialização
+        """
+        # Obtém o dicionário padrão de atributos
+        state = self.__dict__.copy()
+
+        # Adiciona atributos especiais se existirem
+        special_attrs = ['feature_names_in_']
+        for attr in special_attrs:
+            if hasattr(self.model, attr):
+                state[f'model_{attr}'] = getattr(self.model, attr)
+
+        return state
+
+    def __setstate__(self, state):
+        """
+        Método especial para deserialização do objeto
+
+        Args:
+            state: Estado do objeto para restauração
+        """
+        # Restaura o dicionário de atributos
+        self.__dict__.update(state)
+
     def preprocess_data(self, data, features, target, test_size=0.2, random_state=42):
         """
         Pré-processa os dados para treinamento

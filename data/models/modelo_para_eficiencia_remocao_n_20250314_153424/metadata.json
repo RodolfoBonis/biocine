@@ -1,0 +1,24 @@
+{
+    "name": "Modelo para eficiencia_remocao_n",
+    "model_dir": "modelo_para_eficiencia_remocao_n_20250314_153424",
+    "timestamp": "20250314_153424",
+    "datetime": "2025-03-14 15:34:24",
+    "features": [
+        "tempo",
+        "biomassa",
+        "substrato",
+        "temperatura",
+        "concentracao_n"
+    ],
+    "target": "eficiencia_remocao_n",
+    "description": "Modelo treinado para prever eficiencia_remocao_n usando 5 caracter\u00edsticas",
+    "model_type": "RandomForestModel",
+    "serialization": "pickle-getstate",
+    "metrics": {
+        "train_r2": 0.9998539067608241,
+        "test_r2": 0.9995438554557502,
+        "train_mse": 0.04368310853940171,
+        "test_mse": 0.1278380302862216
+    },
+    "model_file": "model.pkl"
+}
