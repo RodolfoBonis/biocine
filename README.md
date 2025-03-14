@@ -1,153 +1,65 @@
-# BioCine - Software de Modelagem Cinética
-
-![BioCine Logo](https://via.placeholder.com/800x150?text=BioCine+-+Modelagem+Cin%C3%A9tica)
+# BioCine - Software de Modelagem Cinética de Bioprocessos
 
 ## Descrição
+BioCine é uma ferramenta de software desenvolvida para a modelagem cinética do processo de tratamento terciário em batelada/semicontínuo do soro do leite por microalgas e fungos filamentosos. O software implementa modelos cinéticos clássicos (Monod e Logístico) e técnicas de aprendizado de máquina para prever e otimizar a eficiência do processo.
 
-BioCine é um software especializado para modelagem cinética e previsão de eficiência no tratamento terciário do soro de leite utilizando microalgas e fungos filamentosos. Esta ferramenta permite:
-
-- Importar e gerenciar dados experimentais
-- Aplicar modelos cinéticos de Monod e Logístico
-- Analisar a eficiência de remoção de poluentes
-- Prever o comportamento do sistema utilizando machine learning
-- Otimizar o processo de tratamento
-- Visualizar resultados através de gráficos interativos
-- Exportar relatórios e análises
-
-## Requisitos do Sistema
-
-- Python 3.8 ou superior
-- Bibliotecas Python listadas em `requirements.txt`
-- Mínimo 4GB de RAM
-- Windows 10/11, macOS ou Linux
+## Características Principais
+- Modelagem cinética usando modelo de Monod
+- Modelagem cinética usando modelo Logístico
+- Visualização de dados experimentais
+- Importação e processamento de dados em formato CSV
+- Cálculo de eficiência de remoção de poluentes (Nitrogênio, Fósforo, DQO)
+- Visualização de crescimento de biomassa
+- Predição usando Random Forest
+- Avaliação de modelos (MSE, R²)
+- Visualização da importância de características
+- Exportação de relatório
 
 ## Instalação
 
-### 1. Clone o repositório ou baixe os arquivos
-
 ```bash
-git clone https://github.com/seunome/biocine.git
+# Clone o repositório
+git clone https://github.com/username/biocine.git
 cd biocine
-```
 
-### 2. Configure um ambiente virtual (recomendado)
-
-#### Windows
-```bash
+# Crie um ambiente virtual (opcional, mas recomendado)
 python -m venv venv
-venv\Scripts\activate
-```
+source venv/bin/activate  # No Windows: venv\Scripts\activate
 
-#### macOS/Linux
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Instale as dependências
-
-```bash
+# Instale as dependências
 pip install -r requirements.txt
 ```
 
-## Utilização
-
-### Executando a aplicação
+## Uso
+Para iniciar o aplicativo:
 
 ```bash
 streamlit run app.py
 ```
 
-Após executar o comando acima, o software será iniciado e abrirá automaticamente no seu navegador padrão. Caso isso não aconteça, acesse:
-
-```
-http://localhost:8501
-```
-
-### Fluxo de Trabalho
-
-1. **Entrada de Dados**:
-   - Utilize os dados de exemplo para demonstração
-   - Carregue seus próprios dados em formato CSV
-   - Insira dados manualmente
-
-2. **Modelagem Cinética**:
-   - Ajuste modelos de Monod e Logístico aos seus dados
-   - Visualize o ajuste dos modelos
-   - Obtenha parâmetros cinéticos
-
-3. **Machine Learning**:
-   - Treine modelos para prever parâmetros
-   - Otimize o processo de tratamento
-   - Analise a importância dos fatores
-
-4. **Visualização e Resultados**:
-   - Visualize dados consolidados
-   - Compare diferentes modelos
-   - Exporte relatórios com os resultados
-
 ## Estrutura do Projeto
-
 ```
 biocine/
-│
-├── app.py                # Aplicação principal Streamlit
-├── models.py             # Implementação dos modelos cinéticos e ML
-├── visualization.py      # Funções de visualização
-├── data_utils.py         # Processamento de dados
-├── requirements.txt      # Dependências do projeto
-└── README.md             # Este arquivo
+├── app.py                    # Ponto de entrada principal (Streamlit)
+├── requirements.txt          # Dependências do projeto
+├── README.md                 # Documentação do projeto
+├── config/                   # Configurações do aplicativo
+├── data/                     # Diretório para dados
+├── models/                   # Implementações de modelos
+├── tests/                    # Testes automatizados
+├── ui/                       # Interface de usuário modularizada
+└── utils/                    # Utilitários
 ```
 
-## Fundamentos Teóricos
-
-### Modelo de Monod
-
-O modelo de Monod descreve a relação entre a taxa específica de crescimento dos micro-organismos e a concentração de substrato limitante:
-
-```
-μ = μmax * S / (Ks + S)
-```
-
-Onde:
-- μ: Taxa específica de crescimento
-- μmax: Taxa máxima específica de crescimento
-- S: Concentração de substrato
-- Ks: Constante de meia saturação
-
-### Modelo Logístico
-
-O modelo Logístico descreve o crescimento de populações biológicas em ambientes com recursos limitados:
-
-```
-dX/dt = μmax * X * (1 - X/Xmax)
-```
-
-Ou em sua forma integrada:
-
-```
-X(t) = Xmax / (1 + ((Xmax - X0) / X0) * exp(-μmax * t))
-```
-
-Onde:
-- X: Concentração de biomassa
-- X0: Concentração inicial de biomassa
-- Xmax: Capacidade máxima do sistema
-- μmax: Taxa máxima de crescimento
-- t: Tempo
-
-## Referências
-
-- HE, Y. et al. (2016). Analysis and model delineation of marine microalgae growth and lipid accumulation in flat-plate photobioreactor.
-- SOARES, A.P.M.R. et al. (2020). Random Forest as a promising application to predict basic-dye biosorption process using orange waste.
-- MALTSEV, Y. & MALTSEVA, K. (2021). Fatty acids of microalgae: Diversity and applications.
-
-## Suporte
-
-Para relatar problemas ou solicitar novos recursos, abra uma issue no GitHub ou entre em contato pelo email:
-
-suporte@biocine.com.br
+## Contribuição
+Este projeto é parte de uma pesquisa acadêmica. Para contribuir, por favor entre em contato com os autores.
 
 ## Licença
+Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para detalhes.
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para mais detalhes.
+## Citação
+Se você usar este software em sua pesquisa, por favor cite:
+
+```
+Nascimento, M. A. A. (2024). Modelagem Cinética do Processo de Tratamento Terciário em Batelada/Semicontínuo do Soro do Leite por Microalgas e Fungos Filamentosos. Relatório Parcial de Iniciação à Pesquisa, Ciclo 2024-2025.
+```

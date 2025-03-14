@@ -1,0 +1,64 @@
+# Configurações do aplicativo BioCine
+
+# Parâmetros padrão para modelagem cinética
+modeling:
+  # Parâmetros do modelo de Monod
+  monod:
+    umax_default: 0.2  # Taxa específica máxima de crescimento (dia^-1)
+    ks_default: 10.0   # Constante de meia saturação (mg/L)
+    y_default: 0.5     # Coeficiente de rendimento (g biomassa/g substrato)
+
+  # Parâmetros do modelo Logístico
+  logistic:
+    umax_default: 0.2  # Taxa específica máxima de crescimento (dia^-1)
+    x0_default: 0.1    # Concentração inicial de biomassa (g/L)
+    xmax_default: 5.0  # Concentração máxima de biomassa (g/L)
+
+# Parâmetros de Machine Learning
+ml:
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 2
+    min_samples_leaf: 1
+    random_state: 42
+
+  # Proporção de divisão treino/teste
+  train_test_split: 0.8
+
+  # Características padrão
+  default_features:
+    - "tempo"
+    - "temperatura"
+    - "ph"
+    - "concentracao_inicial_n"
+    - "concentracao_inicial_p"
+    - "concentracao_inicial_dqo"
+
+# Configurações de visualização
+visualization:
+  colors:
+    primary: "#4CAF50"
+    secondary: "#2196F3"
+    accent: "#FF9800"
+    error: "#F44336"
+
+  # Layout dos gráficos
+  plot_size:
+    width: 800
+    height: 500
+
+# Caminhos de diretórios
+paths:
+  data: "data"
+  example_data: "data/example"
+  processed_data: "data/processed"
+  reports: "reports"
+
+# Informações do projeto
+project:
+  name: "BioCine"
+  version: "1.0.0"
+  description: "Software de Modelagem Cinética de Bioprocessos para Tratamento de Soro de Leite"
+  author: "Micaela Almeida Alves do Nascimento"
+  organization: "Laboratório de Bioprocessos"
