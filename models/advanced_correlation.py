@@ -294,7 +294,6 @@ def create_correlation_network(corr_matrix, threshold=0.5):
                 thickness=15,
                 title='Centralidade de Grau',
                 xanchor='left',
-                titleside='right'
             )
         ),
         hoverinfo='text'

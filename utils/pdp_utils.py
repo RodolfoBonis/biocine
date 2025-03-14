@@ -241,3 +241,211 @@ def plot_partial_dependence_safely(pdp_results):
     )
 
     return fig
+
+
+def calculate_2d_partial_dependence_safely(model, data, feature_pairs, features, grid_resolution=20):
+    """
+    Calcula dependência parcial 2D para pares de características com tratamento seguro
+
+    Args:
+        model: Modelo treinado
+        data: DataFrame com os dados
+        feature_pairs: Lista de pares de características
+        features: Lista completa de características usadas pelo modelo
+        grid_resolution: Resolução da grade
+
+    Returns:
+        Dictionary com superfícies de dependência parcial ou dict vazio se houver erro
+        str: Mensagem de erro ou None
+    """
+    if model is None:
+        return {}, "Modelo não disponível"
+
+    # Verifica se há pares de características válidos
+    if not feature_pairs:
+        return {}, "Nenhum par de características fornecido"
+
+    # Prepara dados para o modelo
+    X = data[features].values
+
+    # Verifica se temos dados suficientes
+    if len(X) < 10:  # Define um mínimo arbitrário
+        return {}, "Dados insuficientes para cálculo de dependência parcial 2D"
+
+    # Calcula dependência parcial 2D
+    pdp_2d_results = {}
+
+    for feature1, feature2 in feature_pairs:
+        try:
+            # Verifica se as características existem nos dados
+            if feature1 not in features or feature2 not in features:
+                st.warning(f"Características {feature1} ou {feature2} não encontradas no modelo")
+                continue
+
+            # Mapeia nomes para índices
+            idx1 = features.index(feature1)
+            idx2 = features.index(feature2)
+
+            # Determina valores mínimos e máximos para cada característica
+            min1, max1 = np.min(data[feature1]), np.max(data[feature1])
+            min2, max2 = np.min(data[feature2]), np.max(data[feature2])
+
+            # Cria grades de valores
+            grid1 = np.linspace(min1, max1, grid_resolution)
+            grid2 = np.linspace(min2, max2, grid_resolution)
+
+            # Inicializa matriz de resultados
+            pdp_matrix = np.zeros((grid_resolution, grid_resolution))
+
+            for i, val1 in enumerate(grid1):
+                for j, val2 in enumerate(grid2):
+                    # Cria cópias do conjunto de dados
+                    X_modified = X.copy()
+
+                    # Substitui os valores das características
+                    X_modified[:, idx1] = val1
+                    X_modified[:, idx2] = val2
+
+                    # Faz predições e calcula média
+                    try:
+                        y_pred = model.predict(X_modified)
+                        pdp_matrix[i, j] = np.mean(y_pred)
+                    except Exception as e:
+                        st.warning(f"Erro na predição para {feature1}={val1}, {feature2}={val2}: {str(e)}")
+                        # Usa média global como fallback
+                        pdp_matrix[i, j] = np.mean(model.predict(X))
+
+            # Armazena resultados
+            pdp_2d_results[(feature1, feature2)] = {
+                'values1': grid1,
+                'values2': grid2,
+                'pdp': pdp_matrix
+            }
+
+        except Exception as e:
+            import traceback
+            st.warning(f"Erro ao calcular dependência parcial 2D para {feature1}, {feature2}: {str(e)}")
+            st.info(traceback.format_exc())  # Mostra stack trace para debug
+
+    return pdp_2d_results, None
+
+
+def plot_2d_partial_dependence_safely(pdp_2d_results):
+    """
+    Plota superfícies de dependência parcial 2D com verificações de segurança
+
+    Args:
+        pdp_2d_results: Resultados de calculate_2d_partial_dependence
+
+    Returns:
+        Dictionary com figuras do plotly ou dict vazio se houver erro
+    """
+    if not pdp_2d_results:
+        st.warning("Nenhum resultado de dependência parcial 2D disponível para plotar")
+
+        # Retorna uma figura vazia para evitar erros na interface
+        fig = go.Figure()
+        fig.add_annotation(text="Nenhum dado para plotar", showarrow=False)
+        fig.update_layout(
+            title="Dependência Parcial 2D",
+            height=400,
+            width=600
+        )
+
+        return {"empty": {"contour": fig, "surface": fig}}
+
+    # Cria uma figura para cada par
+    figures = {}
+
+    for (feature1, feature2), result in pdp_2d_results.items():
+        try:
+            # Verifica se tem os campos necessários
+            if not all(key in result for key in ['values1', 'values2', 'pdp']):
+                st.warning(f"Dados incompletos para o par {feature1}, {feature2}")
+                continue
+
+            # Verifica se os arrays têm o formato correto
+            values1 = result['values1']
+            values2 = result['values2']
+            pdp_matrix = result['pdp']
+
+            if len(values1) == 0 or len(values2) == 0:
+                st.warning(f"Arrays vazios para o par {feature1}, {feature2}")
+                continue
+
+            # Verifica as dimensões da matriz pdp
+            if pdp_matrix.shape != (len(values1), len(values2)):
+                # Tenta redimensionar se possível
+                try:
+                    pdp_matrix = pdp_matrix.reshape(len(values1), len(values2))
+                except:
+                    st.warning(f"Dimensões incompatíveis para a matriz PDL do par {feature1}, {feature2}")
+                    continue
+
+            # Cria figura com contorno
+            contour_fig = go.Figure(data=[
+                go.Contour(
+                    z=pdp_matrix,
+                    x=values1,
+                    y=values2,
+                    colorscale='Viridis',
+                    colorbar=dict(title='Efeito Parcial')
+                )
+            ])
+
+            # Atualiza layout
+            contour_fig.update_layout(
+                title=f'Dependência Parcial 2D: {feature1} x {feature2}',
+                xaxis_title=feature1,
+                yaxis_title=feature2,
+                height=600,
+                width=700
+            )
+
+            # Superfície 3D
+            surface_fig = go.Figure(data=[
+                go.Surface(
+                    z=pdp_matrix,
+                    x=values1,
+                    y=values2,
+                    colorscale='Viridis',
+                    colorbar=dict(title='Efeito Parcial')
+                )
+            ])
+
+            # Atualiza layout
+            surface_fig.update_layout(
+                title=f'Dependência Parcial 3D: {feature1} x {feature2}',
+                scene=dict(
+                    xaxis_title=feature1,
+                    yaxis_title=feature2,
+                    zaxis_title='Efeito Parcial'
+                ),
+                height=700,
+                width=700
+            )
+
+            # Armazena figuras
+            figures[(feature1, feature2)] = {
+                'contour': contour_fig,
+                'surface': surface_fig
+            }
+
+        except Exception as e:
+            import traceback
+            st.warning(f"Erro ao gerar visualização para {feature1}, {feature2}: {str(e)}")
+            st.info(traceback.format_exc())
+
+    # Se não conseguiu gerar nenhuma figura, retorna uma figura vazia
+    if not figures:
+        fig = go.Figure()
+        fig.add_annotation(text="Nenhum gráfico pôde ser gerado", showarrow=False)
+        fig.update_layout(
+            title="Dependência Parcial 2D",
+            height=400,
+            width=600
+        )
+
+        figures["empty"] = {"contour": fig, "surface": fig}
+
+    return figures

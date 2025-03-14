@@ -34,7 +34,17 @@ from utils.report_generator import (
     export_results_to_excel
 )
 
-from utils.pdp_utils import validate_data_for_pdp, calculate_partial_dependence_safely, plot_partial_dependence_safely
+from utils.pdp_utils import (
+    validate_data_for_pdp,
+    calculate_partial_dependence_safely,
+    plot_partial_dependence_safely
+)
+
+from utils.model_utils import (
+    extract_model_features,
+    test_model_compatibility,
+    create_prediction_dataframe,
+)
 
 __all__ = [
     # Data Processor

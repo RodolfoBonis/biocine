@@ -48,13 +48,26 @@ class ProcessOptimizer:
 
     def add_model(self, target, model):
         """
-        Adiciona um modelo preditivo ao otimizador
+        Adiciona um modelo preditivo ao otimizador e registra suas features
 
         Args:
             target: Nome do alvo (ex: 'biomassa', 'eficiencia_remocao_n')
             model: Modelo treinado com método predict()
         """
         self.models[target] = model
+
+        # Tenta extrair as características do modelo - isso é crucial para compatibilidade
+        if hasattr(model, 'feature_names_in_'):
+            # Para modelos scikit-learn modernos
+            self.model_features = {target: list(model.feature_names_in_)}
+        elif hasattr(model, 'feature_names'):
+            # Outra possível fonte
+            self.model_features = {target: list(model.feature_names)}
+        else:
+            # Se não conseguirmos extrair, assumimos que usa todas as características
+            if not hasattr(self, 'model_features'):
+                self.model_features = {}
+            self.model_features[target] = self.parameter_names if self.parameter_names else []
 
     def set_parameter_bounds(self, bounds_dict):
         """
@@ -227,23 +240,59 @@ class ProcessOptimizer:
             if target not in self.models:
                 raise ValueError(f"Não existe modelo para o alvo: {target}")
 
+        # Inicializa dicionário para armazenar as características usadas por cada modelo
+        model_features = {}
+
+        # Verifica as características de cada modelo
+        for target in targets:
+            model = self.models[target]
+
+            # Use as características armazenadas no dicionário model_features
+            if hasattr(self, 'model_features') and target in self.model_features:
+                features = self.model_features[target]
+                model_features[target] = features
+            else:
+                # Tenta extrair características automaticamente se não foi feito anteriormente
+                if hasattr(model, 'feature_names_in_'):
+                    features = list(model.feature_names_in_)
+                    model_features[target] = features
+                elif hasattr(model, 'feature_names'):
+                    features = list(model.feature_names)
+                    model_features[target] = features
+                else:
+                    # Se não conseguimos determinar, usamos todos os parâmetros (código original)
+                    model_features[target] = self.parameter_names
+
+            # Debug: imprima as características para cada modelo
+            import streamlit as st
+            st.write(f"Modelo {target} espera as características: {model_features[target]}")
+            st.write(f"Tipo de modelo: {type(model).__name__}")
+
         # Função objetivo ponderada
         def weighted_objective(X):
             X_dict = {name: val for name, val in zip(self.parameter_names, X)}
-            X_df = pd.DataFrame([X_dict])
 
             weighted_sum = 0
             for target, weight in target_weights.items():
+                # Adapta o vetor de entrada para conter apenas as características esperadas pelo modelo
+                target_features = model_features[target]
+
+                # Cria um vetor com apenas as características esperadas pelo modelo
+                X_target = {feat: X_dict.get(feat, 0) for feat in target_features}
+                X_df = pd.DataFrame([X_target])
+
                 prediction = float(self.models[target].predict(X_df)[0])
+
                 if target.startswith('eficiencia') or target == 'biomassa':
-                    # Maximize these targets
+                    # Maximize esses alvos
                     weighted_sum -= weight * prediction
                 else:
-                    # Minimize other targets (like concentration)
+                    # Minimize outros alvos (como concentração)
                     weighted_sum += weight * prediction
 
             return weighted_sum
 
+        # O resto da função permanece o mesmo...
         # Prepara diferentes combinações de pesos
         weight_combinations = []
         pareto_results = []
@@ -275,13 +324,17 @@ class ProcessOptimizer:
 
             # Avalia os valores para cada objetivo
             opt_params_dict = result['optimal_parameters']
-            opt_params_df = pd.DataFrame([opt_params_dict])
 
             result_row = {'weights': weights}
             result_row.update(opt_params_dict)
 
             for target in targets:
-                pred_value = float(self.models[target].predict(opt_params_df)[0])
+                # Cria um dataframe com apenas as características esperadas pelo modelo
+                target_features = model_features[target]
+                X_target = {feat: opt_params_dict.get(feat, 0) for feat in target_features}
+                X_df = pd.DataFrame([X_target])
+
+                pred_value = float(self.models[target].predict(X_df)[0])
                 result_row[f'{target}_value'] = pred_value
 
             pareto_results.append(result_row)
@@ -362,178 +415,205 @@ class ProcessOptimizer:
 
         return self.surrogate_model
 
-    def create_response_surface(self, param1, param2, resolution=20, target=None, fixed_params=None):
-        """
-        Cria superfície de resposta para dois parâmetros
-
-        Args:
-            param1: Nome do primeiro parâmetro
-            param2: Nome do segundo parâmetro
-            resolution: Resolução da grade
-            target: Alvo para modelar (usa surrogate_model se None)
-            fixed_params: Valores fixos para outros parâmetros
-
-        Returns:
-            Figura do plotly com superfície de resposta
-        """
-        if param1 not in self.parameter_bounds or param2 not in self.parameter_bounds:
-            raise ValueError("Os parâmetros devem estar nos limites definidos")
-
-        # Prepara modelo e alvo
-        if target is not None and target in self.models:
-            model = self.models[target]
-            target_name = target
-            parameter_names = self.parameter_names
-        elif self.surrogate_model is not None:
-            model = self.surrogate_model['model']
-            target_name = self.surrogate_model['target']
-            parameter_names = self.surrogate_model['parameter_names']
-        else:
-            raise ValueError("Forneça um alvo válido ou crie um modelo substituto primeiro")
-
-        # Cria grade de valores para os dois parâmetros
-        p1_bounds = self.parameter_bounds[param1]
-        p2_bounds = self.parameter_bounds[param2]
-
-        p1_values = np.linspace(p1_bounds[0], p1_bounds[1], resolution)
-        p2_values = np.linspace(p2_bounds[0], p2_bounds[1], resolution)
-
-        P1, P2 = np.meshgrid(p1_values, p2_values)
-
-        # Prepara valores para outros parâmetros
-        if fixed_params is None:
-            fixed_params = {}
-
-        for param in parameter_names:
-            if param not in [param1, param2] and param not in fixed_params:
-                # Define valor médio para parâmetros não especificados
-                bounds = self.parameter_bounds[param]
-                fixed_params[param] = (bounds[0] + bounds[1]) / 2
-
-        # Cria matriz de valores de resposta
-        Z = np.zeros_like(P1)
-
-        for i in range(resolution):
-            for j in range(resolution):
-                # Cria vetor de entrada para o modelo
-                X = {}
-                X[param1] = P1[i, j]
-                X[param2] = P2[i, j]
-
-                # Adiciona parâmetros fixos
-                for param, value in fixed_params.items():
-                    X[param] = value
-
-                # Prepara o formato correto para o modelo
-                if type(model).__name__ == 'GaussianProcessRegressor' or \
-                        type(model).__name__ == 'MLPRegressor' or \
-                        type(model).__name__ == 'RandomForestRegressor':
-                    # Converte dicionário para array na ordem correta
-                    X_array = np.array([X.get(param, 0) for param in parameter_names]).reshape(1, -1)
-                    Z[i, j] = model.predict(X_array)[0]
-                else:
-                    # Assume que o modelo espera um DataFrame
-                    X_df = pd.DataFrame([X])
-                    Z[i, j] = model.predict(X_df)[0]
-
-        # Cria figura da superfície de resposta
-        fig = go.Figure(data=[
-            go.Surface(
-                x=P1, y=P2, z=Z,
-                colorscale='Viridis',
-                colorbar=dict(title=target_name)
-            )
-        ])
-
-        # Atualiza layout
-        fig.update_layout(
-            title=f'Superfície de Resposta: {target_name}',
-            scene=dict(
-                xaxis_title=param1,
-                yaxis_title=param2,
-                zaxis_title=target_name
-            ),
-            width=800,
-            height=800
-        )
-
-        return fig
-
     def create_contour_plot(self, param1, param2, resolution=50, target=None, fixed_params=None):
         """
-        Cria gráfico de contorno para dois parâmetros
+        Cria gráfico de contorno com total compatibilidade de características
 
         Args:
             param1: Nome do primeiro parâmetro
             param2: Nome do segundo parâmetro
             resolution: Resolução da grade
-            target: Alvo para modelar (usa surrogate_model se None)
+            target: Alvo para modelar
             fixed_params: Valores fixos para outros parâmetros
-
-        Returns:
-            Figura do plotly com gráfico de contorno
         """
-        if param1 not in self.parameter_bounds or param2 not in self.parameter_bounds:
-            raise ValueError("Os parâmetros devem estar nos limites definidos")
+        import numpy as np
+        import pandas as pd
+        import plotly.graph_objects as go
+        import streamlit as st
 
-        # Prepara modelo e alvo
+        # PARTE 1: PREPARAÇÃO E VALIDAÇÃO INICIAL
+
+        # Verifica parâmetros básicos
+        if param1 not in self.parameter_bounds or param2 not in self.parameter_bounds:
+            raise ValueError(f"Os parâmetros {param1} e {param2} devem estar nos limites definidos")
+
+        # PARTE 2: OBTENHA INFORMAÇÕES SOBRE O MODELO E CARACTERÍSTICAS
+
         if target is not None and target in self.models:
             model = self.models[target]
             target_name = target
-            parameter_names = self.parameter_names
-        elif self.surrogate_model is not None:
-            model = self.surrogate_model['model']
-            target_name = self.surrogate_model['target']
-            parameter_names = self.surrogate_model['parameter_names']
-        else:
-            raise ValueError("Forneça um alvo válido ou crie um modelo substituto primeiro")
 
-        # Cria grade de valores para os dois parâmetros
+            # Determina as características que o modelo espera
+            expected_features = None
+
+            # Método 1: Verifica model_features
+            if hasattr(self, 'model_features') and target in self.model_features:
+                expected_features = self.model_features[target]
+                source = "model_features"
+
+            # Método 2: Verifica feature_names_in_
+            elif hasattr(model, 'feature_names_in_'):
+                expected_features = list(model.feature_names_in_)
+                source = "feature_names_in_"
+
+            # Método 3: Verifica feature_names
+            elif hasattr(model, 'feature_names'):
+                expected_features = list(model.feature_names)
+                source = "feature_names"
+
+            # Método 4: Verifica feature_importances_
+            elif hasattr(model, 'feature_importances_'):
+                # Se temos importâncias de características, mas não os nomes, usamos os parâmetros
+                n_features = len(model.feature_importances_)
+                if len(self.parameter_names) >= n_features:
+                    expected_features = self.parameter_names[:n_features]
+                    source = "feature_importances_"
+                else:
+                    st.warning(
+                        f"O modelo espera {n_features} características, mas temos apenas {len(self.parameter_names)} parâmetros")
+
+            # Método 5: Verifica o próprio modelo para pistas sobre o número de características
+            elif hasattr(model, 'n_features_in_'):
+                n_features = model.n_features_in_
+                if len(self.parameter_names) >= n_features:
+                    expected_features = self.parameter_names[:n_features]
+                    source = "n_features_in_"
+                else:
+                    st.warning(
+                        f"O modelo espera {n_features} características, mas temos apenas {len(self.parameter_names)} parâmetros")
+
+            # Se não conseguimos determinar, usamos um fallback com mais chances de funcionar
+            if expected_features is None:
+                st.warning(
+                    "Não foi possível determinar as características esperadas pelo modelo. Tentativa com fallback.")
+
+                # Teste de tentativa e erro para descobrir o número certo de características
+                for n in range(1, len(self.parameter_names) + 1):
+                    test_features = self.parameter_names[:n]
+                    if param1 in test_features and param2 in test_features:
+                        try:
+                            # Tenta fazer uma previsão simples para ver se funciona
+                            test_data = pd.DataFrame({f: [0.0] for f in test_features})
+                            model.predict(test_data)
+                            expected_features = test_features
+                            source = "trial_and_error"
+                            st.success(f"Determinadas {n} características pelo método de tentativa e erro")
+                            break
+                        except:
+                            pass
+
+            # Se ainda não temos características esperadas, é um problema
+            if expected_features is None:
+                raise ValueError("Não foi possível determinar as características esperadas pelo modelo")
+
+            # Debug: mostra as características determinadas
+            st.info(f"Características do modelo ({source}): {', '.join(expected_features)}")
+
+            # Verifica se os parâmetros selecionados estão nas características esperadas
+            if param1 not in expected_features or param2 not in expected_features:
+                raise ValueError(
+                    f"Os parâmetros {param1} e {param2} não estão nas características esperadas pelo modelo: {expected_features}")
+
+        else:
+            # Handles surrogate models or errors
+            if hasattr(self, 'surrogate_model') and self.surrogate_model is not None:
+                model = self.surrogate_model.get('model')
+                target_name = self.surrogate_model.get('target', 'Desconhecido')
+                expected_features = self.surrogate_model.get('parameter_names', [])
+
+                if not expected_features:
+                    raise ValueError("O modelo substituto não tem características definidas")
+            else:
+                raise ValueError("Alvo inválido ou modelo substituto não definido")
+
+        # PARTE 3: CRIAR GRADE DE VALORES E ESTRUTURAS DE DADOS
+
+        # Define a grade de valores para os parâmetros selecionados
         p1_bounds = self.parameter_bounds[param1]
         p2_bounds = self.parameter_bounds[param2]
 
         p1_values = np.linspace(p1_bounds[0], p1_bounds[1], resolution)
         p2_values = np.linspace(p2_bounds[0], p2_bounds[1], resolution)
 
-        P1, P2 = np.meshgrid(p1_values, p2_values)
+        # Cria matriz 2D para os valores da função objetivo
+        Z = np.zeros((resolution, resolution))
 
-        # Prepara valores para outros parâmetros
+        # PARTE 4: PREPARAR PARÂMETROS FIXOS QUE O MODELO NECESSITA
+
+        # Inicializa dicionário para parâmetros fixos
         if fixed_params is None:
             fixed_params = {}
 
-        for param in parameter_names:
-            if param not in [param1, param2] and param not in fixed_params:
-                # Define valor médio para parâmetros não especificados
-                bounds = self.parameter_bounds[param]
-                fixed_params[param] = (bounds[0] + bounds[1]) / 2
-
-        # Cria matriz de valores de resposta
-        Z = np.zeros_like(P1)
-
-        for i in range(resolution):
-            for j in range(resolution):
-                # Cria vetor de entrada para o modelo
-                X = {}
-                X[param1] = P1[i, j]
-                X[param2] = P2[i, j]
-
-                # Adiciona parâmetros fixos
-                for param, value in fixed_params.items():
-                    X[param] = value
-
-                # Prepara o formato correto para o modelo
-                if type(model).__name__ == 'GaussianProcessRegressor' or \
-                        type(model).__name__ == 'MLPRegressor' or \
-                        type(model).__name__ == 'RandomForestRegressor':
-                    # Converte dicionário para array na ordem correta
-                    X_array = np.array([X.get(param, 0) for param in parameter_names]).reshape(1, -1)
-                    Z[i, j] = model.predict(X_array)[0]
+        # Completa parâmetros necessários mas não fornecidos
+        for feature in expected_features:
+            if feature != param1 and feature != param2 and feature not in fixed_params:
+                # Se o parâmetro está nos limites definidos, usa o valor médio
+                if feature in self.parameter_bounds:
+                    bounds = self.parameter_bounds[feature]
+                    fixed_params[feature] = (bounds[0] + bounds[1]) / 2
+                    st.info(f"Usando valor médio {fixed_params[feature]} para o parâmetro '{feature}'")
                 else:
-                    # Assume que o modelo espera um DataFrame
-                    X_df = pd.DataFrame([X])
-                    Z[i, j] = model.predict(X_df)[0]
+                    # Caso contrário, usa zero como valor padrão
+                    fixed_params[feature] = 0.0
+                    st.warning(f"Parâmetro '{feature}' não tem limites definidos. Usando valor padrão 0.0.")
 
-        # Adiciona resultados otimizados se disponíveis
+        # PARTE 5: CALCULAR A SUPERFÍCIE DE RESPOSTA
+
+        # Para cada ponto na grade, calcula o valor da função objetivo
+        for i, val1 in enumerate(p1_values):
+            for j, val2 in enumerate(p2_values):
+                # Cria um dicionário com todos os valores de entrada
+                X_dict = {param1: val1, param2: val2}
+
+                # Adiciona os parâmetros fixos
+                for param, value in fixed_params.items():
+                    # Só adiciona se for uma característica esperada pelo modelo
+                    if param in expected_features:
+                        X_dict[param] = value
+
+                # Cria um DataFrame com EXATAMENTE as características que o modelo espera, na ordem correta
+                X_df = pd.DataFrame({f: [X_dict.get(f, 0.0)] for f in expected_features})
+
+                # Verificação adicional de segurança
+                if len(X_df.columns) != len(expected_features):
+                    st.error(
+                        f"Erro na criação do DataFrame: Esperadas {len(expected_features)} características, mas criadas {len(X_df.columns)}")
+                    st.write("Esperadas:", expected_features)
+                    st.write("Criadas:", X_df.columns.tolist())
+
+                # Faz a previsão
+                try:
+                    pred = model.predict(X_df)
+                    Z[i, j] = pred[0]
+                except Exception as e:
+                    st.error(f"Erro ao fazer previsão: {str(e)}")
+                    st.write(f"Modelo espera {len(expected_features)} características: {expected_features}")
+                    st.write(f"DataFrame tem {len(X_df.columns)} colunas: {X_df.columns.tolist()}")
+                    import traceback
+                    st.write(traceback.format_exc())
+                    raise
+
+        # PARTE 6: CRIAR A VISUALIZAÇÃO
+
+        # Cria a figura de contorno
+        fig = go.Figure()
+
+        # Adiciona o contorno principal
+        fig.add_trace(
+            go.Contour(
+                z=Z,
+                x=p1_values,
+                y=p2_values,
+                colorscale='Viridis',
+                colorbar=dict(title=target_name),
+                contours=dict(
+                    showlabels=True,
+                    labelfont=dict(size=12, color='white')
+                )
+            )
+        )
+
+        # Adiciona pontos ótimos, se disponíveis
         opt_points = []
 
         for method, result in self.optimization_results.items():
@@ -547,25 +627,6 @@ class ProcessOptimizer:
                         'value': result['optimal_value']
                     })
 
-        # Cria figura do contorno
-        fig = go.Figure()
-
-        # Adiciona contorno
-        fig.add_trace(
-            go.Contour(
-                x=p1_values,
-                y=p2_values,
-                z=Z,
-                colorscale='Viridis',
-                colorbar=dict(title=target_name),
-                contours=dict(
-                    showlabels=True,
-                    labelfont=dict(size=12, color='white')
-                )
-            )
-        )
-
-        # Adiciona pontos ótimos
         for point in opt_points:
             fig.add_trace(
                 go.Scatter(
@@ -584,13 +645,221 @@ class ProcessOptimizer:
                 )
             )
 
-        # Atualiza layout
+        # Configura o layout final
         fig.update_layout(
             title=f'Gráfico de Contorno: {target_name}',
             xaxis_title=param1,
             yaxis_title=param2,
             width=800,
             height=700
+        )
+
+        return fig
+
+    def create_response_surface(self, param1, param2, resolution=20, target=None, fixed_params=None):
+        """
+        Cria superfície de resposta com total compatibilidade de características
+
+        Args:
+            param1: Nome do primeiro parâmetro
+            param2: Nome do segundo parâmetro
+            resolution: Resolução da grade
+            target: Alvo para modelar
+            fixed_params: Valores fixos para outros parâmetros
+        """
+        import numpy as np
+        import pandas as pd
+        import plotly.graph_objects as go
+        import streamlit as st
+
+        # PARTE 1: PREPARAÇÃO E VALIDAÇÃO INICIAL
+
+        # Verifica parâmetros básicos
+        if param1 not in self.parameter_bounds or param2 not in self.parameter_bounds:
+            raise ValueError(f"Os parâmetros {param1} e {param2} devem estar nos limites definidos")
+
+        # PARTE 2: OBTENHA INFORMAÇÕES SOBRE O MODELO E CARACTERÍSTICAS
+
+        if target is not None and target in self.models:
+            model = self.models[target]
+            target_name = target
+
+            # Determina as características que o modelo espera
+            expected_features = None
+
+            # Método 1: Verifica model_features
+            if hasattr(self, 'model_features') and target in self.model_features:
+                expected_features = self.model_features[target]
+                source = "model_features"
+
+            # Método 2: Verifica feature_names_in_
+            elif hasattr(model, 'feature_names_in_'):
+                expected_features = list(model.feature_names_in_)
+                source = "feature_names_in_"
+
+            # Método 3: Verifica feature_names
+            elif hasattr(model, 'feature_names'):
+                expected_features = list(model.feature_names)
+                source = "feature_names"
+
+            # Método 4: Verifica feature_importances_
+            elif hasattr(model, 'feature_importances_'):
+                # Se temos importâncias de características, mas não os nomes, usamos os parâmetros
+                n_features = len(model.feature_importances_)
+                if len(self.parameter_names) >= n_features:
+                    expected_features = self.parameter_names[:n_features]
+                    source = "feature_importances_"
+                else:
+                    st.warning(
+                        f"O modelo espera {n_features} características, mas temos apenas {len(self.parameter_names)} parâmetros")
+
+            # Método 5: Verifica o próprio modelo para pistas sobre o número de características
+            elif hasattr(model, 'n_features_in_'):
+                n_features = model.n_features_in_
+                if len(self.parameter_names) >= n_features:
+                    expected_features = self.parameter_names[:n_features]
+                    source = "n_features_in_"
+                else:
+                    st.warning(
+                        f"O modelo espera {n_features} características, mas temos apenas {len(self.parameter_names)} parâmetros")
+
+            # Se não conseguimos determinar, usamos um fallback com mais chances de funcionar
+            if expected_features is None:
+                st.warning(
+                    "Não foi possível determinar as características esperadas pelo modelo. Tentativa com fallback.")
+
+                # Teste de tentativa e erro para descobrir o número certo de características
+                for n in range(1, len(self.parameter_names) + 1):
+                    test_features = self.parameter_names[:n]
+                    if param1 in test_features and param2 in test_features:
+                        try:
+                            # Tenta fazer uma previsão simples para ver se funciona
+                            test_data = pd.DataFrame({f: [0.0] for f in test_features})
+                            model.predict(test_data)
+                            expected_features = test_features
+                            source = "trial_and_error"
+                            st.success(f"Determinadas {n} características pelo método de tentativa e erro")
+                            break
+                        except:
+                            pass
+
+            # Se ainda não temos características esperadas, é um problema
+            if expected_features is None:
+                raise ValueError("Não foi possível determinar as características esperadas pelo modelo")
+
+            # Debug: mostra as características determinadas
+            st.info(f"Características do modelo ({source}): {', '.join(expected_features)}")
+
+            # Verifica se os parâmetros selecionados estão nas características esperadas
+            if param1 not in expected_features or param2 not in expected_features:
+                raise ValueError(
+                    f"Os parâmetros {param1} e {param2} não estão nas características esperadas pelo modelo: {expected_features}")
+
+        else:
+            # Handles surrogate models or errors
+            if hasattr(self, 'surrogate_model') and self.surrogate_model is not None:
+                model = self.surrogate_model.get('model')
+                target_name = self.surrogate_model.get('target', 'Desconhecido')
+                expected_features = self.surrogate_model.get('parameter_names', [])
+
+                if not expected_features:
+                    raise ValueError("O modelo substituto não tem características definidas")
+            else:
+                raise ValueError("Alvo inválido ou modelo substituto não definido")
+
+        # PARTE 3: CRIAR GRADE DE VALORES E ESTRUTURAS DE DADOS
+
+        # Define a grade de valores para os parâmetros selecionados
+        p1_bounds = self.parameter_bounds[param1]
+        p2_bounds = self.parameter_bounds[param2]
+
+        p1_values = np.linspace(p1_bounds[0], p1_bounds[1], resolution)
+        p2_values = np.linspace(p2_bounds[0], p2_bounds[1], resolution)
+
+        # Cria matrizes para a grade 2D
+        P1, P2 = np.meshgrid(p1_values, p2_values)
+
+        # Cria matriz para os valores da função objetivo
+        Z = np.zeros_like(P1)
+
+        # PARTE 4: PREPARAR PARÂMETROS FIXOS QUE O MODELO NECESSITA
+
+        # Inicializa dicionário para parâmetros fixos
+        if fixed_params is None:
+            fixed_params = {}
+
+        # Completa parâmetros necessários mas não fornecidos
+        for feature in expected_features:
+            if feature != param1 and feature != param2 and feature not in fixed_params:
+                # Se o parâmetro está nos limites definidos, usa o valor médio
+                if feature in self.parameter_bounds:
+                    bounds = self.parameter_bounds[feature]
+                    fixed_params[feature] = (bounds[0] + bounds[1]) / 2
+                    st.info(f"Usando valor médio {fixed_params[feature]} para o parâmetro '{feature}'")
+                else:
+                    # Caso contrário, usa zero como valor padrão
+                    fixed_params[feature] = 0.0
+                    st.warning(f"Parâmetro '{feature}' não tem limites definidos. Usando valor padrão 0.0.")
+
+        # PARTE 5: CALCULAR A SUPERFÍCIE DE RESPOSTA
+
+        # Para cada ponto na grade, calcula o valor da função objetivo
+        for i in range(resolution):
+            for j in range(resolution):
+                # Cria um dicionário com todos os valores de entrada
+                X_dict = {param1: P1[i, j], param2: P2[i, j]}
+
+                # Adiciona os parâmetros fixos
+                for param, value in fixed_params.items():
+                    # Só adiciona se for uma característica esperada pelo modelo
+                    if param in expected_features:
+                        X_dict[param] = value
+
+                # Cria um DataFrame com EXATAMENTE as características que o modelo espera, na ordem correta
+                X_df = pd.DataFrame({f: [X_dict.get(f, 0.0)] for f in expected_features})
+
+                # Verificação adicional de segurança
+                if len(X_df.columns) != len(expected_features):
+                    st.error(
+                        f"Erro na criação do DataFrame: Esperadas {len(expected_features)} características, mas criadas {len(X_df.columns)}")
+                    st.write("Esperadas:", expected_features)
+                    st.write("Criadas:", X_df.columns.tolist())
+
+                # Faz a previsão
+                try:
+                    pred = model.predict(X_df)
+                    Z[i, j] = pred[0]
+                except Exception as e:
+                    st.error(f"Erro ao fazer previsão: {str(e)}")
+                    st.write(f"Modelo espera {len(expected_features)} características: {expected_features}")
+                    st.write(f"DataFrame tem {len(X_df.columns)} colunas: {X_df.columns.tolist()}")
+                    import traceback
+                    st.write(traceback.format_exc())
+                    raise
+
+        # PARTE 6: CRIAR A VISUALIZAÇÃO
+
+        # Cria a figura de superfície
+        fig = go.Figure(data=[
+            go.Surface(
+                z=Z,
+                x=P1,
+                y=P2,
+                colorscale='Viridis',
+                colorbar=dict(title=target_name)
+            )
+        ])
+
+        # Configura o layout final
+        fig.update_layout(
+            title=f'Superfície de Resposta: {target_name}',
+            scene=dict(
+                xaxis_title=param1,
+                yaxis_title=param2,
+                zaxis_title=target_name
+            ),
+            width=800,
+            height=800
         )
 
         return fig
