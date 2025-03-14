@@ -23,7 +23,6 @@ __all__ = [
     'make_subplots',
     'create_correlation_network',
     'create_advanced_heatmap',
-    'streamlit_correlation_interface',
     'nonlinear_relationship_exploration',
     'variance_inflation_factor',
     'ProcessOptimizer',

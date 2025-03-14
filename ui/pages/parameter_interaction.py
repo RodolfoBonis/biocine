@@ -222,73 +222,105 @@ def show_parameter_interaction():
 
                 # Botão para ajustar modelo e calcular dependência parcial
                 if st.button("Calcular Dependência Parcial", key="calc_pdp"):
-                    with st.spinner("Ajustando modelo e calculando dependência parcial..."):
-                        try:
-                            # Ajusta o modelo
-                            st.session_state.parameter_analyzer.fit_model(model_type=model_type, **model_params)
+                    if target_col is None or target_col == "Nenhum":
+                        st.error("Selecione um alvo para calcular a dependência parcial.")
+                    else:
+                        # Verificar dados
+                        from utils.pdp_utils import validate_data_for_pdp, calculate_partial_dependence_safely, \
+                            plot_partial_dependence_safely
 
-                            # Calcula dependência parcial 1D
-                            pdp_results = st.session_state.parameter_analyzer.calculate_partial_dependence()
+                        # Verifica se os dados são adequados
+                        valid, error_msg = validate_data_for_pdp(st.session_state.data, selected_features, target_col)
 
-                            # Plota dependência parcial 1D
-                            fig = st.session_state.parameter_analyzer.plot_partial_dependence(pdp_results)
-                            st.plotly_chart(fig, use_container_width=True)
+                        if not valid:
+                            st.error(f"Dados inadequados para cálculo de dependência parcial: {error_msg}")
+                            st.info(
+                                "Dica: Verifique se há dados suficientes e se há variação nos parâmetros selecionados.")
+                        else:
+                            with st.spinner("Ajustando modelo e calculando dependência parcial..."):
+                                try:
+                                    # Ajusta o modelo
+                                    st.session_state.parameter_analyzer.fit_model(model_type=model_type, **model_params)
 
-                            # Calcula dependência parcial 2D para pares com maior interação
-                            if hasattr(st.session_state.parameter_analyzer,
-                                       'interaction_scores') and st.session_state.parameter_analyzer.interaction_scores is not None:
-                                # Pares com maior interação
-                                pairs = []
-                                for i, feature1 in enumerate(selected_features):
-                                    for j, feature2 in enumerate(selected_features):
-                                        if i < j:  # Evita duplicações
-                                            score = st.session_state.parameter_analyzer.interaction_scores.loc[
-                                                feature1, feature2]
-                                            pairs.append((feature1, feature2, score))
+                                    # Calcula dependência parcial de forma segura
+                                    model = st.session_state.parameter_analyzer.model
+                                    data = st.session_state.data
 
-                                # Ordena por pontuação decrescente
-                                pairs.sort(key=lambda x: x[2], reverse=True)
+                                    pdp_results, error = calculate_partial_dependence_safely(
+                                        model,
+                                        data,
+                                        selected_features,
+                                        target_col
+                                    )
 
-                                # Pega os 2 primeiros pares
-                                feature_pairs = [(p[0], p[1]) for p in pairs[:min(2, len(pairs))]]
-                            else:
-                                # Sem informações de interação, usa primeiros 2 pares
-                                feature_pairs = []
-                                for i, feature1 in enumerate(selected_features):
-                                    for j, feature2 in enumerate(selected_features):
-                                        if i < j:  # Evita duplicações
-                                            feature_pairs.append((feature1, feature2))
-                                            if len(feature_pairs) >= 2:
-                                                break
-                                    if len(feature_pairs) >= 2:
-                                        break
+                                    if error:
+                                        st.error(f"Erro ao calcular dependência parcial: {error}")
+                                    else:
+                                        if not pdp_results:
+                                            st.warning(
+                                                "Não foi possível calcular dependência parcial para nenhum parâmetro.")
+                                            st.info(
+                                                "Isso pode ocorrer quando há poucos dados ou pouca variação nos parâmetros.")
+                                        else:
+                                            # Plota dependência parcial 1D de forma segura
+                                            fig = plot_partial_dependence_safely(pdp_results)
+                                            st.plotly_chart(fig, use_container_width=True)
 
-                            # Calcula dependência parcial 2D
-                            pdp_2d_results = st.session_state.parameter_analyzer.calculate_2d_partial_dependence(
-                                feature_pairs)
+                                            # Calcula dependência parcial 2D para pares com maior interação
+                                            if hasattr(st.session_state.parameter_analyzer,
+                                                       'interaction_scores') and st.session_state.parameter_analyzer.interaction_scores is not None:
+                                                # Pares com maior interação
+                                                pairs = []
+                                                for i, feature1 in enumerate(selected_features):
+                                                    for j, feature2 in enumerate(selected_features):
+                                                        if i < j:  # Evita duplicações
+                                                            score = st.session_state.parameter_analyzer.interaction_scores.loc[
+                                                                feature1, feature2]
+                                                            pairs.append((feature1, feature2, score))
 
-                            # Plota dependência parcial 2D
-                            pdp_2d_figs = st.session_state.parameter_analyzer.plot_2d_partial_dependence(pdp_2d_results)
+                                                # Ordena por pontuação decrescente
+                                                pairs.sort(key=lambda x: x[2], reverse=True)
 
-                            # Exibe figuras 2D
-                            st.subheader("Dependência Parcial 2D")
+                                                # Pega os 2 primeiros pares
+                                                feature_pairs = [(p[0], p[1]) for p in pairs[:min(2, len(pairs))]]
+                                            else:
+                                                # Sem informações de interação, usa primeiros 2 pares
+                                                feature_pairs = []
+                                                for i, feature1 in enumerate(selected_features):
+                                                    for j, feature2 in enumerate(selected_features):
+                                                        if i < j:  # Evita duplicações
+                                                            feature_pairs.append((feature1, feature2))
+                                                            if len(feature_pairs) >= 2:
+                                                                break
+                                                    if len(feature_pairs) >= 2:
+                                                        break
 
-                            for (feature1, feature2), figs in pdp_2d_figs.items():
-                                st.markdown(f"**{feature1} x {feature2}**")
+                                            # Calcula dependência parcial 2D
+                                            pdp_2d_results = st.session_state.parameter_analyzer.calculate_2d_partial_dependence(
+                                                feature_pairs)
 
-                                # Cria guias para contorno e superfície
-                                cont_tab, surf_tab = st.tabs(["Contorno", "Superfície 3D"])
+                                            # Plota dependência parcial 2D
+                                            pdp_2d_figs = st.session_state.parameter_analyzer.plot_2d_partial_dependence(pdp_2d_results)
 
-                                with cont_tab:
-                                    st.plotly_chart(figs['contour'], use_container_width=True)
+                                            # Exibe figuras 2D
+                                            st.subheader("Dependência Parcial 2D")
 
-                                with surf_tab:
-                                    st.plotly_chart(figs['surface'], use_container_width=True)
+                                            for (feature1, feature2), figs in pdp_2d_figs.items():
+                                                st.markdown(f"**{feature1} x {feature2}**")
 
-                        except Exception as e:
-                            st.error(f"Erro ao calcular dependência parcial: {str(e)}")
-                            import traceback
-                            st.error(traceback.format_exc())
+                                                # Cria guias para contorno e superfície
+                                                cont_tab, surf_tab = st.tabs(["Contorno", "Superfície 3D"])
+
+                                                with cont_tab:
+                                                    st.plotly_chart(figs['contour'], use_container_width=True)
+
+                                                with surf_tab:
+                                                    st.plotly_chart(figs['surface'], use_container_width=True)
+
+                                except Exception as e:
+                                    st.error(f"Erro ao calcular dependência parcial: {str(e)}")
+                                    import traceback
+                                    st.error(traceback.format_exc())
 
         with tabs[3]:
             st.subheader("Visualização de Alta Dimensão")

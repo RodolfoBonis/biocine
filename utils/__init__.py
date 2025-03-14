@@ -34,6 +34,8 @@ from utils.report_generator import (
     export_results_to_excel
 )
 
+from utils.pdp_utils import validate_data_for_pdp, calculate_partial_dependence_safely, plot_partial_dependence_safely
+
 __all__ = [
     # Data Processor
     'import_csv',
@@ -59,5 +61,10 @@ __all__ = [
     'generate_ml_summary',
     'generate_data_summary',
     'export_report_to_html',
-    'export_results_to_excel'
+    'export_results_to_excel',
+
+    # PDP Utils
+    'validate_data_for_pdp',
+    'calculate_partial_dependence_safely',
+    'plot_partial_dependence_safely'
 ]

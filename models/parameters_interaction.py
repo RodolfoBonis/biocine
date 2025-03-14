@@ -499,8 +499,14 @@ class ParameterInteractionAnalyzer:
                     # Cria cópias dos dados
                     X_copies = np.repeat(X, 1, axis=0)
 
-                    # Substitui o valor da característica em análise
-                    X_copies[:, idx] = val
+                    # Certifica-se de que o índice é válido antes de atribuir
+                    if 0 <= idx < X_copies.shape[1]:
+                        # Substitui o valor da característica em análise
+                        X_copies[:, idx] = val
+                    else:
+                        # Se o índice for inválido, pula esta iteração
+                        print(f"Aviso: Índice {idx} inválido para X_copies com forma {X_copies.shape}")
+                        continue
 
                     # Faz predição
                     y_pred = self.model.predict(X_copies)
@@ -515,7 +521,9 @@ class ParameterInteractionAnalyzer:
                 }
 
             except Exception as e:
+                import traceback
                 print(f"Erro ao calcular dependência parcial para {feature}: {str(e)}")
+                print(traceback.format_exc())  # Imprime o traceback completo
 
         return pdp_results
 
@@ -536,9 +544,9 @@ class ParameterInteractionAnalyzer:
         if pdp_results is None:
             raise ValueError("Forneça resultados de calculate_partial_dependence()")
 
-        # Check if pdp_results is empty
+        # Verifica se pdp_results está vazio
         if not pdp_results:
-            # Return a simple figure with a message
+            # Retorna uma figura simples com uma mensagem
             fig = go.Figure()
             fig.add_annotation(
                 text="Nenhum resultado disponível para plotar",
@@ -555,10 +563,25 @@ class ParameterInteractionAnalyzer:
         # Número de características
         n_features = len(pdp_results)
 
-        # Ensure n_rows is at least 1
+        # Verificação de segurança: se n_features for 0, retorna uma figura vazia com mensagem
+        if n_features == 0:
+            fig = go.Figure()
+            fig.add_annotation(
+                text="Nenhum resultado disponível para plotar",
+                showarrow=False,
+                font=dict(size=15)
+            )
+            fig.update_layout(
+                title="Dependência Parcial",
+                height=400,
+                width=700
+            )
+            return fig
+
+        # Garante que n_rows seja pelo menos 1
         n_rows = max(1, (n_features + n_cols - 1) // n_cols)
 
-        # Ensure n_cols doesn't exceed number of features
+        # Garante que n_cols não exceda o número de características
         n_cols = min(n_cols, n_features)
 
         # Cria subplots
