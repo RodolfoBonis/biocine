@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Importa os módulos da UI
-from ui import show_home, show_data_input, show_modeling, show_ml, show_results, show_about
+from ui import show_home, show_data_input, show_modeling, show_ml, show_results, show_about, show_correlation_analysis, show_advanced_optimization, show_parameter_interaction
 from ui.pages.help import (
     show_help_home,
     show_monod_help,
@@ -111,6 +111,9 @@ def main():
         "Entrada de Dados",
         "Modelagem Cinética",
         "Machine Learning",
+        'Análise de Correlação Avançada',
+        'Otimização de Processo',
+        'Análise de Interação',
         "Resultados",
         "Sobre"
     ]
@@ -167,7 +170,7 @@ def main():
             show_workflow_help()
         elif help_selection == "Exportação de Resultados":
             show_export_help()
-        return  # Retorna após mostrar a ajuda
+        return
 
     # Se a ajuda contextual estiver ativa, mostrar a página de ajuda correspondente
     if st.session_state.show_help and st.session_state.help_context:
@@ -195,6 +198,12 @@ def main():
         show_ml()
     elif selection == "Resultados":
         show_results()
+    elif selection == "Análise de Correlação Avançada":
+        show_correlation_analysis()
+    elif selection == "Otimização de Processo":
+        show_advanced_optimization()
+    elif selection == "Análise de Interação":
+        show_parameter_interaction()
     elif selection == "Sobre":
         show_about()
 

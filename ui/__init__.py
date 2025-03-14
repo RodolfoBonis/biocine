@@ -10,6 +10,9 @@ from ui.pages.modeling import show_modeling
 from ui.pages.ml import show_ml
 from ui.pages.results import show_results
 from ui.pages.about import show_about
+from ui.pages.correlation_analysis import show_correlation_analysis
+from ui.pages.optimization import show_advanced_optimization
+from ui.pages.parameter_interaction import show_parameter_interaction
 
 __all__ = [
     'show_home',
@@ -17,5 +20,8 @@ __all__ = [
     'show_modeling',
     'show_ml',
     'show_results',
-    'show_about'
+    'show_about',
+    'show_correlation_analysis',
+    'show_advanced_optimization',
+    'show_parameter_interaction'
 ]

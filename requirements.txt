@@ -33,3 +33,8 @@ xlrd>=2.0.1
 xlwt>=1.3.0
 
 jinja2>=3.0.0
+
+pingouin>=0.5.5
+networkx>=3.4.2
+
+pyDOE>=0.3.8

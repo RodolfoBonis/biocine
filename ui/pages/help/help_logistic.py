@@ -140,10 +140,10 @@ def show_logistic_help():
     st.markdown("""
         | Parâmetro | Descrição | Significado Biológico | Faixa Típica |
         |-----------|-----------|------------------------|--------------|
-        | μmax | Taxa específica máxima de crescimento (dia⁻¹) | Taxa máxima de crescimento durante a fase exponencial | Microalgas: 0.1 - 1.0 dia⁻¹<br>Fungos: 0.05 - 0.5 dia⁻¹ |
+        | μmax | Taxa específica máxima de crescimento (dia⁻¹) | Taxa máxima de crescimento durante a fase exponencial | Microalgas: 0.1 - 1.0 dia⁻¹ <br>Fungos: 0.05 - 0.5 dia⁻¹ |
         | X₀ | Concentração inicial de biomassa (g/L) | Inóculo inicial ou biomassa no tempo zero | 0.01 - 0.5 g/L |
         | Xmax | Concentração máxima de biomassa (g/L) | Capacidade de suporte do ambiente | Microalgas: 1.0 - 8.0 g/L<br>Fungos: 3.0 - 15.0 g/L |
-    """)
+    """, unsafe_allow_html=True)
 
     # Quando usar
     st.markdown("### Quando Usar o Modelo Logístico")
